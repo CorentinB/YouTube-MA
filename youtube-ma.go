@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/tidwall/gjson"
@@ -36,13 +38,12 @@ func fetchBasic(id string) *Video {
 			os.Exit(1)
 		}
 		bodyString := string(bodyBytes)
-		output := []byte(bodyString)
 		// Parsing data
-		title := gjson.Get(video.Raw, "title")
+		title := gjson.Get(bodyString, "title")
 		video.Title = title.String()
-		author := gjson.Get(video.Raw, "author_name")
+		author := gjson.Get(bodyString, "author_name")
 		video.Author = author.String()
-		thumbnail := gjson.Get(video.Raw, "thumbnail_url")
+		thumbnail := gjson.Get(bodyString, "thumbnail_url")
 		video.Thumbnail = thumbnail.String()
 	} else {
 		color.Red("Error: unable to fetch basic informations from oembed service.")
@@ -76,7 +77,7 @@ func fetchAnnotations(id string, video *Video) *Video {
 func fetchRawData(id string, key string, video *Video) *Video {
 	// Requesting raw data through YouTube's API
 	url := "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + id + "&key=" + key
-	color.Cyan("[DEBUG] API URL FETCHED: " + url)
+	//color.Cyan("[DEBUG] API URL FETCHED: " + url)
 	resp, err := http.Get(url)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -104,20 +105,71 @@ func fetchDescription(video *Video) *Video {
 	return video
 }
 
+func writeFiles(video *Video) {
+	video.Title = strings.Replace(video.Title, " ", "_", -1)
+	annotationsFile, errAnno := os.Create(video.Title + ".annotations.xml")
+	if errAnno != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
+		os.Exit(1)
+	}
+	defer annotationsFile.Close()
+	descriptionFile, errDesc := os.Create(video.Title + ".description")
+	if errDesc != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errDesc)
+		os.Exit(1)
+	}
+	defer descriptionFile.Close()
+	infoFile, errInfo := os.Create(video.Title + ".info.json")
+	if errInfo != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errInfo)
+		os.Exit(1)
+	}
+	defer infoFile.Close()
+	fmt.Fprintf(annotationsFile, video.Annotations)
+	fmt.Fprintf(descriptionFile, video.Description)
+	fmt.Fprintf(infoFile, video.Raw)
+}
+
+func downloadThumbnail(video *Video) {
+	video.Title = strings.Replace(video.Title, " ", "_", -1)
+	// Create the file
+	out, err := os.Create(video.Title + ".jpg")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer out.Close()
+	// Get the data
+	resp, err := http.Get(video.Thumbnail)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
 	video := new(Video)
 	args := os.Args[1:]
 	id := args[0]
 	key := args[1]
-	color.Cyan("[DEBUG] ID: " + id)
-	color.Cyan("[DEBUG] API key: " + key)
+	color.Green("Starting fetching basic infos for ID: " + id)
 	video = fetchBasic(id)
-	color.Green("\nTitle: " + video.Title)
-	color.Green("Author: " + video.Author)
-	color.Green("Thumbnail: " + video.Thumbnail)
+	color.Green("Fetching annotations..")
 	video = fetchAnnotations(id, video)
-	color.Green("Annotations: " + video.Annotations)
+	color.Green("Fetching data from API..")
 	video = fetchRawData(id, key, video)
+	color.Green("Parsing description..")
 	video = fetchDescription(video)
-	color.Green("Description: " + video.Description)
+	color.Green("Writing informations locally..")
+	writeFiles(video)
+	color.Green("Downloading thumbnail..")
+	downloadThumbnail(video)
+	color.Cyan("Done!")
 }
