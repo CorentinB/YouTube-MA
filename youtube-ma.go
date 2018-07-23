@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/savaki/jq"
+	"github.com/fatih/color"
+	"github.com/tidwall/gjson"
 )
 
 type Video struct {
@@ -14,14 +15,12 @@ type Video struct {
 	Author      string
 	Annotations string
 	Thumbnail   string
+	Raw         string
+	Description string
 }
 
-func fetchingBasic(id string) *Video {
+func fetchBasic(id string) *Video {
 	video := new(Video)
-	// Declare jq operations
-	getTitle, _ := jq.Parse(".title")
-	getAuthor, _ := jq.Parse(".author_name")
-	getThumb, _ := jq.Parse(".thumbnail_url")
 	// Requesting data from oembed (allow getting title, author, thumbnail url)
 	resp, err := http.Get("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + id + "&format=json")
 	if err != nil {
@@ -39,17 +38,19 @@ func fetchingBasic(id string) *Video {
 		bodyString := string(bodyBytes)
 		output := []byte(bodyString)
 		// Parsing data
-		title, _ := getTitle.Apply(output)
-		video.Title = string(title)
-		authorName, _ := getAuthor.Apply(output)
-		video.Author = string(authorName)
-		thumbnailUrl, _ := getThumb.Apply(output)
-		video.Thumbnail = string(thumbnailUrl)
+		title := gjson.Get(video.Raw, "title")
+		video.Title = title.String()
+		author := gjson.Get(video.Raw, "author_name")
+		video.Author = author.String()
+		thumbnail := gjson.Get(video.Raw, "thumbnail_url")
+		video.Thumbnail = thumbnail.String()
+	} else {
+		color.Red("Error: unable to fetch basic informations from oembed service.")
 	}
 	return video
 }
 
-func fetchingAnnotations(id string, video *Video) *Video {
+func fetchAnnotations(id string, video *Video) *Video {
 	// Requesting annotations from YouTube
 	resp, err := http.Get("https://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + id)
 	if err != nil {
@@ -66,7 +67,40 @@ func fetchingAnnotations(id string, video *Video) *Video {
 		}
 		annotations := string(bodyBytes)
 		video.Annotations = annotations
+	} else {
+		color.Red("Error: unable to fetch annotations.")
 	}
+	return video
+}
+
+func fetchRawData(id string, key string, video *Video) *Video {
+	// Requesting raw data through YouTube's API
+	url := "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + id + "&key=" + key
+	color.Cyan("[DEBUG] API URL FETCHED: " + url)
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	// Checking response status code
+	if resp.StatusCode == http.StatusOK {
+		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
+		if err2 != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		rawData := string(bodyBytes)
+		video.Raw = rawData
+	} else {
+		color.Red("Error: unable to fetch raw video's data from API.")
+	}
+	return video
+}
+
+func fetchDescription(video *Video) *Video {
+	value := gjson.Get(video.Raw, "items.0.snippet.description")
+	video.Description = value.String()
 	return video
 }
 
@@ -75,12 +109,15 @@ func main() {
 	args := os.Args[1:]
 	id := args[0]
 	key := args[1]
-	fmt.Println("[DEBUG] ID: " + id)
-	fmt.Println("[DEBUG] API key: " + key)
-	video = fetchingBasic(id)
-	fmt.Println("\nTitle: " + video.Title)
-	fmt.Println("Author: " + video.Author)
-	fmt.Println("Thumbnail: " + video.Thumbnail)
-	video = fetchingAnnotations(id, video)
-	fmt.Println("Annotations: " + video.Annotations)
+	color.Cyan("[DEBUG] ID: " + id)
+	color.Cyan("[DEBUG] API key: " + key)
+	video = fetchBasic(id)
+	color.Green("\nTitle: " + video.Title)
+	color.Green("Author: " + video.Author)
+	color.Green("Thumbnail: " + video.Thumbnail)
+	video = fetchAnnotations(id, video)
+	color.Green("Annotations: " + video.Annotations)
+	video = fetchRawData(id, key, video)
+	video = fetchDescription(video)
+	color.Green("Description: " + video.Description)
 }
