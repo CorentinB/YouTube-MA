@@ -21,36 +21,6 @@ type Video struct {
 	Description string
 }
 
-func fetchBasic(id string) *Video {
-	video := new(Video)
-	// Requesting data from oembed (allow getting title, author, thumbnail url)
-	resp, err := http.Get("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + id + "&format=json")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-	// Checking response status code
-	if resp.StatusCode == http.StatusOK {
-		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-		if err2 != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		bodyString := string(bodyBytes)
-		// Parsing data
-		title := gjson.Get(bodyString, "title")
-		video.Title = title.String()
-		author := gjson.Get(bodyString, "author_name")
-		video.Author = author.String()
-		thumbnail := gjson.Get(bodyString, "thumbnail_url")
-		video.Thumbnail = thumbnail.String()
-	} else {
-		color.Red("Error: unable to fetch basic informations from oembed service.")
-	}
-	return video
-}
-
 func fetchAnnotations(id string, video *Video) *Video {
 	// Requesting annotations from YouTube
 	resp, err := http.Get("https://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + id)
@@ -102,6 +72,18 @@ func fetchRawData(id string, key string, video *Video) *Video {
 func fetchDescription(video *Video) *Video {
 	value := gjson.Get(video.Raw, "items.0.snippet.description")
 	video.Description = value.String()
+	return video
+}
+
+func fetchTitle(video *Video) *Video {
+	title := gjson.Get(video.Raw, "items.0.snippet.title")
+	video.Title = title.String()
+	return video
+}
+
+func fetchThumbnail(video *Video) *Video {
+	thumbnail := gjson.Get(video.Raw, "items.0.snippet.thumbnails.maxres.url")
+	video.Thumbnail = thumbnail.String()
 	return video
 }
 
@@ -159,17 +141,20 @@ func main() {
 	args := os.Args[1:]
 	id := args[0]
 	key := args[1]
-	color.Green("Starting fetching basic infos for ID: " + id)
-	video = fetchBasic(id)
-	color.Green("Fetching annotations..")
-	video = fetchAnnotations(id, video)
+	color.Green("Archiving ID: " + id)
 	color.Green("Fetching data from API..")
 	video = fetchRawData(id, key, video)
+	color.Green("Parsing title..")
+	video = fetchTitle(video)
 	color.Green("Parsing description..")
 	video = fetchDescription(video)
-	color.Green("Writing informations locally..")
-	writeFiles(video)
+	color.Green("Parsing thumbnail URL..")
+	video = fetchThumbnail(video)
 	color.Green("Downloading thumbnail..")
 	downloadThumbnail(video)
+	color.Green("Fetching annotations..")
+	video = fetchAnnotations(id, video)
+	color.Green("Writing informations locally..")
+	writeFiles(video)
 	color.Cyan("Done!")
 }
