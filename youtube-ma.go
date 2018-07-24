@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/fatih/color"
 	"github.com/tidwall/gjson"
 )
@@ -17,8 +19,9 @@ type Video struct {
 	Title       string
 	Annotations string
 	Thumbnail   string
-	Raw         string
+	Oembed      string
 	Description string
+	Html        string
 }
 
 func fetchAnnotations(id string, video *Video) *Video {
@@ -44,9 +47,9 @@ func fetchAnnotations(id string, video *Video) *Video {
 	return video
 }
 
-func fetchRawData(id string, key string, video *Video) *Video {
+func fetchOembed(id string, video *Video) *Video {
 	// Requesting raw data through YouTube's API
-	url := "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + id + "&key=" + key
+	url := "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + id + "&format=json"
 	//color.Cyan("[DEBUG] API URL FETCHED: " + url)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -61,28 +64,22 @@ func fetchRawData(id string, key string, video *Video) *Video {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		rawData := string(bodyBytes)
-		video.Raw = rawData
+		oembed := string(bodyBytes)
+		video.Oembed = oembed
 	} else {
-		color.Red("Error: unable to fetch raw video's data from API.")
+		color.Red("Error: unable to fetch oembed video's data.")
 	}
 	return video
 }
 
-func fetchDescription(video *Video) *Video {
-	value := gjson.Get(video.Raw, "items.0.snippet.description")
-	video.Description = value.String()
-	return video
-}
-
 func fetchTitle(video *Video) *Video {
-	title := gjson.Get(video.Raw, "items.0.snippet.title")
-	video.Title = title.String()
+	title := gjson.Get(video.Oembed, "title")
+	video.Title = strings.Replace(title.String(), " ", "_", -1)
 	return video
 }
 
 func fetchThumbnail(video *Video) *Video {
-	thumbnail := gjson.Get(video.Raw, "items.0.snippet.thumbnails.maxres.url")
+	thumbnail := gjson.Get(video.Oembed, "thumbnail_url")
 	video.Thumbnail = thumbnail.String()
 	return video
 }
@@ -95,25 +92,17 @@ func writeFiles(video *Video) {
 		os.Exit(1)
 	}
 	defer annotationsFile.Close()
-	descriptionFile, errDesc := os.Create(video.Title + ".description")
-	if errDesc != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errDesc)
+	htmlFile, errFile := os.Create(video.Title + ".html")
+	if errFile != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
 		os.Exit(1)
 	}
-	defer descriptionFile.Close()
-	infoFile, errInfo := os.Create(video.Title + ".info.json")
-	if errInfo != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errInfo)
-		os.Exit(1)
-	}
-	defer infoFile.Close()
+	defer htmlFile.Close()
 	fmt.Fprintf(annotationsFile, video.Annotations)
-	fmt.Fprintf(descriptionFile, video.Description)
-	fmt.Fprintf(infoFile, video.Raw)
+	fmt.Fprintf(htmlFile, video.Html)
 }
 
 func downloadThumbnail(video *Video) {
-	video.Title = strings.Replace(video.Title, " ", "_", -1)
 	// Create the file
 	out, err := os.Create(video.Title + ".jpg")
 	if err != nil {
@@ -136,19 +125,47 @@ func downloadThumbnail(video *Video) {
 	}
 }
 
+func fetchYoutubeHtml(id string, video *Video) *Video {
+	// Request the HTML page.
+	res, err := http.Get("https://youtube.com/watch?v=" + id)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		log.Fatalf("Status code error: %d %s", res.StatusCode, res.Status)
+	}
+	bytes, _ := ioutil.ReadAll(res.Body)
+	video.Html = string(bytes)
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	doc.Find("title").Each(func(i int, s *goquery.Selection) {
+		// For each item found, get the band and title
+		title := s.Find("title").Text()
+		color.Red("Debug title")
+		fmt.Printf("Title: %s\n", title)
+	})
+	return video
+}
+
 func main() {
 	start := time.Now()
 	video := new(Video)
 	args := os.Args[1:]
 	id := args[0]
-	key := args[1]
+	//key := args[1]
 	color.Green("Archiving ID: " + id)
-	color.Green("Fetching data from API..")
-	video = fetchRawData(id, key, video)
+	color.Green("Fetching HTML raw page..")
+	video = fetchYoutubeHtml(id, video)
+	color.Green("Fetching data from Oembed..")
+	video = fetchOembed(id, video)
 	color.Green("Parsing title..")
 	video = fetchTitle(video)
-	color.Green("Parsing description..")
-	video = fetchDescription(video)
+	//color.Green("Parsing description..")
+	//video = fetchDescription(video)
 	color.Green("Parsing thumbnail URL..")
 	video = fetchThumbnail(video)
 	color.Green("Downloading thumbnail..")
@@ -157,5 +174,6 @@ func main() {
 	video = fetchAnnotations(id, video)
 	color.Green("Writing informations locally..")
 	writeFiles(video)
+
 	color.Cyan("Done in %s!", time.Since(start))
 }
