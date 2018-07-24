@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/tidwall/gjson"
@@ -136,6 +137,7 @@ func downloadThumbnail(video *Video) {
 }
 
 func main() {
+	start := time.Now()
 	video := new(Video)
 	args := os.Args[1:]
 	id := args[0]
@@ -155,5 +157,5 @@ func main() {
 	video = fetchAnnotations(id, video)
 	color.Green("Writing informations locally..")
 	writeFiles(video)
-	color.Cyan("Done!")
+	color.Cyan("Done in %s!", time.Since(start))
 }
