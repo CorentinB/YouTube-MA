@@ -12,7 +12,6 @@ import (
 
 	"github.com/anaskhan96/soup"
 	"github.com/fatih/color"
-	"github.com/tidwall/gjson"
 )
 
 // Structure containing all metadata for the video
@@ -20,7 +19,6 @@ type Video struct {
 	Title       string
 	Annotations string
 	Thumbnail   string
-	Oembed      string
 	Description string
 }
 
@@ -47,37 +45,6 @@ func fetchAnnotations(id string, video *Video) *Video {
 	return video
 }
 
-func fetchOembed(id string, video *Video) *Video {
-	// Requesting raw data through YouTube's API
-	url := "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + id + "&format=json"
-	//color.Cyan("[DEBUG] API URL FETCHED: " + url)
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-	// Checking response status code
-	if resp.StatusCode == http.StatusOK {
-		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-		if err2 != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		oembed := string(bodyBytes)
-		video.Oembed = oembed
-	} else {
-		color.Red("Error: unable to fetch oembed video's data.")
-	}
-	return video
-}
-
-func fetchTitle(video *Video) *Video {
-	title := gjson.Get(video.Oembed, "title")
-	video.Title = strings.Replace(title.String(), " ", "_", -1)
-	return video
-}
-
 func writeFiles(video *Video) {
 	video.Title = strings.Replace(video.Title, " ", "_", -1)
 	annotationsFile, errAnno := os.Create(video.Title + ".annotations.xml")
@@ -86,19 +53,12 @@ func writeFiles(video *Video) {
 		os.Exit(1)
 	}
 	defer annotationsFile.Close()
-	oembedFile, errOembed := os.Create(video.Title + ".oembed.json")
-	if errOembed != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errOembed)
-		os.Exit(1)
-	}
-	defer oembedFile.Close()
 	descriptionFile, errDescription := os.Create(video.Title + ".description")
 	if errDescription != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errDescription)
 		os.Exit(1)
 	}
 	defer descriptionFile.Close()
-	fmt.Fprintf(oembedFile, video.Oembed)
 	fmt.Fprintf(annotationsFile, video.Annotations)
 	fmt.Fprintf(descriptionFile, video.Description)
 }
@@ -138,9 +98,14 @@ func parseHTML(id string, video *Video) *Video {
 	for _, description := range description {
 		buffer.WriteString(description.Text())
 	}
+	// Parsing thumbnail
 	thumbnail := doc.Find("meta", "property", "og:image")
-	video.Description = buffer.String()
 	video.Thumbnail = string(thumbnail.Attrs()["content"])
+	// Parsing title
+	title := doc.Find("meta", "property", "og:title")
+	video.Title = strings.Replace(string(title.Attrs()["content"]), " ", "_", -1)
+	// Writing description to the structure
+	video.Description = buffer.String()
 	return video
 }
 
@@ -150,11 +115,7 @@ func main() {
 	args := os.Args[1:]
 	id := args[0]
 	color.Green("Archiving ID: " + id)
-	color.Green("Fetching data from Oembed..")
-	video = fetchOembed(id, video)
-	color.Green("Parsing title..")
-	video = fetchTitle(video)
-	color.Green("Parsing description and thumbnail..")
+	color.Green("Parsing description, title and thumbnail..")
 	video = parseHTML(id, video)
 	color.Green("Downloading thumbnail..")
 	downloadThumbnail(video)
