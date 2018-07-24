@@ -1,27 +1,27 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
+	"github.com/anaskhan96/soup"
 	"github.com/fatih/color"
 	"github.com/tidwall/gjson"
 )
 
+// Structure containing all metadata for the video
 type Video struct {
 	Title       string
 	Annotations string
 	Thumbnail   string
 	Oembed      string
 	Description string
-	Html        string
 }
 
 func fetchAnnotations(id string, video *Video) *Video {
@@ -78,12 +78,6 @@ func fetchTitle(video *Video) *Video {
 	return video
 }
 
-func fetchThumbnail(video *Video) *Video {
-	thumbnail := gjson.Get(video.Oembed, "thumbnail_url")
-	video.Thumbnail = thumbnail.String()
-	return video
-}
-
 func writeFiles(video *Video) {
 	video.Title = strings.Replace(video.Title, " ", "_", -1)
 	annotationsFile, errAnno := os.Create(video.Title + ".annotations.xml")
@@ -92,21 +86,21 @@ func writeFiles(video *Video) {
 		os.Exit(1)
 	}
 	defer annotationsFile.Close()
-	htmlFile, errHtml := os.Create(video.Title + ".html")
-	if errHtml != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errHtml)
-		os.Exit(1)
-	}
-	defer htmlFile.Close()
 	oembedFile, errOembed := os.Create(video.Title + ".oembed.json")
 	if errOembed != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errOembed)
 		os.Exit(1)
 	}
 	defer oembedFile.Close()
+	descriptionFile, errDescription := os.Create(video.Title + ".description")
+	if errDescription != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errDescription)
+		os.Exit(1)
+	}
+	defer descriptionFile.Close()
 	fmt.Fprintf(oembedFile, video.Oembed)
 	fmt.Fprintf(annotationsFile, video.Annotations)
-	fmt.Fprintf(htmlFile, video.Html)
+	fmt.Fprintf(descriptionFile, video.Description)
 }
 
 func downloadThumbnail(video *Video) {
@@ -132,29 +126,21 @@ func downloadThumbnail(video *Video) {
 	}
 }
 
-func fetchYoutubeHtml(id string, video *Video) *Video {
-	// Request the HTML page.
-	res, err := http.Get("https://youtube.com/watch?v=" + id)
+func parseHTML(id string, video *Video) *Video {
+	var buffer bytes.Buffer
+	resp, err := soup.Get("https://youtube.com/watch?v=" + id)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		log.Fatalf("Status code error: %d %s", res.StatusCode, res.Status)
+	doc := soup.HTMLParse(resp)
+	description := doc.Find("div", "id", "watch-description-text").FindAll("p")
+	for _, description := range description {
+		buffer.WriteString(description.Text())
 	}
-	bytes, _ := ioutil.ReadAll(res.Body)
-	video.Html = string(bytes)
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	doc.Find("title").Each(func(i int, s *goquery.Selection) {
-		// For each item found, get the band and title
-		title := s.Find("title").Text()
-		color.Red("Debug title")
-		fmt.Printf("Title: %s\n", title)
-	})
+	thumbnail := doc.Find("meta", "property", "og:image")
+	video.Description = buffer.String()
+	video.Thumbnail = string(thumbnail.Attrs()["content"])
 	return video
 }
 
@@ -163,24 +149,18 @@ func main() {
 	video := new(Video)
 	args := os.Args[1:]
 	id := args[0]
-	//key := args[1]
 	color.Green("Archiving ID: " + id)
-	color.Green("Fetching HTML raw page..")
-	video = fetchYoutubeHtml(id, video)
 	color.Green("Fetching data from Oembed..")
 	video = fetchOembed(id, video)
 	color.Green("Parsing title..")
 	video = fetchTitle(video)
-	//color.Green("Parsing description..")
-	//video = fetchDescription(video)
-	color.Green("Parsing thumbnail URL..")
-	video = fetchThumbnail(video)
+	color.Green("Parsing description and thumbnail..")
+	video = parseHTML(id, video)
 	color.Green("Downloading thumbnail..")
 	downloadThumbnail(video)
 	color.Green("Fetching annotations..")
 	video = fetchAnnotations(id, video)
 	color.Green("Writing informations locally..")
 	writeFiles(video)
-
 	color.Cyan("Done in %s!", time.Since(start))
 }
