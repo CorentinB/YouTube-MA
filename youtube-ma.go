@@ -16,15 +16,17 @@ import (
 
 // Structure containing all metadata for the video
 type Video struct {
+	ID          string
 	Title       string
 	Annotations string
 	Thumbnail   string
 	Description string
+	Path        string
 }
 
-func fetchAnnotations(id string, video *Video) *Video {
+func fetchAnnotations(video *Video) *Video {
 	// Requesting annotations from YouTube
-	resp, err := http.Get("https://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + id)
+	resp, err := http.Get("https://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + video.ID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -47,13 +49,13 @@ func fetchAnnotations(id string, video *Video) *Video {
 
 func writeFiles(video *Video) {
 	video.Title = strings.Replace(video.Title, " ", "_", -1)
-	annotationsFile, errAnno := os.Create(video.Title + ".annotations.xml")
+	annotationsFile, errAnno := os.Create(video.Path + video.ID + "_" + video.Title + ".annotations.xml")
 	if errAnno != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
 		os.Exit(1)
 	}
 	defer annotationsFile.Close()
-	descriptionFile, errDescription := os.Create(video.Title + ".description")
+	descriptionFile, errDescription := os.Create(video.Path + video.ID + "_" + video.Title + ".description")
 	if errDescription != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errDescription)
 		os.Exit(1)
@@ -65,7 +67,7 @@ func writeFiles(video *Video) {
 
 func downloadThumbnail(video *Video) {
 	// Create the file
-	out, err := os.Create(video.Title + ".jpg")
+	out, err := os.Create(video.Path + video.ID + "_" + video.Title + ".jpg")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -86,9 +88,9 @@ func downloadThumbnail(video *Video) {
 	}
 }
 
-func parseHTML(id string, video *Video) *Video {
+func parseHTML(video *Video) *Video {
 	var buffer bytes.Buffer
-	resp, err := soup.Get("https://youtube.com/watch?v=" + id)
+	resp, err := soup.Get("https://youtube.com/watch?v=" + video.ID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -98,6 +100,7 @@ func parseHTML(id string, video *Video) *Video {
 	for _, description := range description {
 		buffer.WriteString(description.Text())
 	}
+
 	// Parsing thumbnail
 	thumbnail := doc.Find("meta", "property", "og:image")
 	video.Thumbnail = string(thumbnail.Attrs()["content"])
@@ -109,18 +112,32 @@ func parseHTML(id string, video *Video) *Video {
 	return video
 }
 
+func genPath(video *Video) *Video {
+	firstChar := video.ID[:1]
+	video.Path = firstChar + "/" + video.ID + "/"
+	if _, err := os.Stat(video.Path); os.IsNotExist(err) {
+		err = os.MkdirAll(video.Path, 0755)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	return video
+}
+
 func main() {
 	start := time.Now()
 	video := new(Video)
 	args := os.Args[1:]
-	id := args[0]
-	color.Green("Archiving ID: " + id)
+	video.ID = args[0]
+	color.Green("Archiving ID: " + video.ID)
+	video = genPath(video)
 	color.Green("Parsing description, title and thumbnail..")
-	video = parseHTML(id, video)
+	video = parseHTML(video)
 	color.Green("Downloading thumbnail..")
 	downloadThumbnail(video)
 	color.Green("Fetching annotations..")
-	video = fetchAnnotations(id, video)
+	video = fetchAnnotations(video)
 	color.Green("Writing informations locally..")
 	writeFiles(video)
 	color.Cyan("Done in %s!", time.Since(start))
