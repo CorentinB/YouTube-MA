@@ -92,12 +92,19 @@ func writeFiles(video *Video) {
 		os.Exit(1)
 	}
 	defer annotationsFile.Close()
-	htmlFile, errFile := os.Create(video.Title + ".html")
-	if errFile != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
+	htmlFile, errHtml := os.Create(video.Title + ".html")
+	if errHtml != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errHtml)
 		os.Exit(1)
 	}
 	defer htmlFile.Close()
+	oembedFile, errOembed := os.Create(video.Title + ".oembed.json")
+	if errOembed != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errOembed)
+		os.Exit(1)
+	}
+	defer oembedFile.Close()
+	fmt.Fprintf(oembedFile, video.Oembed)
 	fmt.Fprintf(annotationsFile, video.Annotations)
 	fmt.Fprintf(htmlFile, video.Html)
 }
