@@ -14,7 +14,6 @@ import (
 
 type Video struct {
 	Title       string
-	Author      string
 	Annotations string
 	Thumbnail   string
 	Raw         string
