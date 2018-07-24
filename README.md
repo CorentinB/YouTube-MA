@@ -1,2 +1,2 @@
-# youtube_meta_archiver
-💾 YouTube video's metadatas archiver written in Golang
+# youtube-ma
+💾 Light and fast YouTube metadata archiver written in Golang
