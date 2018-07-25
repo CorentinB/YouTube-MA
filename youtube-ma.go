@@ -17,9 +17,8 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/labstack/gommon/color"
 	"golang.org/x/text/unicode/norm"
-
-	"github.com/fatih/color"
 )
 
 // Video structure containing all metadata for the video
@@ -203,13 +202,7 @@ func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup)
 	color.Green("Downloading " + lang + " subtitle.." + "[" + langCode + "]")
 	// generate subtitle URL
 	url := "https://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
-	// create the file
-	out, err := os.Create(video.Path + video.ID + "_" + video.Title + "." + langCode + ".xml")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	defer out.Close()
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching ") + color.Yellow(lang) + color.Green(" subtitle.."))
 	// get the data
 	resp, err := http.Get(url)
 	if err != nil {
@@ -217,6 +210,13 @@ func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
+	// create the file
+	out, err := os.Create(video.Path + video.ID + "_" + video.Title + "." + langCode + ".xml")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer out.Close()
 	// write the body to file
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
@@ -256,20 +256,21 @@ func processSingleID(ID string) {
 	var wg sync.WaitGroup
 	video := new(Video)
 	video.ID = ID
-	color.Green("Archiving ID: " + video.ID)
+	color.Println(color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving started."))
 	wg.Add(2)
-	color.Green("Fetching annotations..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching annotations.."))
 	go fetchAnnotations(video, &wg)
-	color.Green("Parsing description, title and thumbnail..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Parsing infos, description, title and thumbnail.."))
 	go parseHTML(video, &wg)
 	wg.Wait()
 	genPath(video)
-	color.Green("Writing informations locally..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Writing informations locally.."))
 	writeFiles(video)
-	color.Green("Downloading thumbnail..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Downloading thumbnail.."))
 	downloadThumbnail(video)
-	color.Green("Fetching subtitles..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching subtitles.."))
 	fetchSubsList(video)
+	color.Println(color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving complete!"))
 }
 
 func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
@@ -277,20 +278,21 @@ func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
 	var wg sync.WaitGroup
 	video := new(Video)
 	video.ID = ID
-	color.Green("Archiving ID: " + video.ID)
+	color.Println(color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving started."))
 	wg.Add(2)
-	color.Green("Fetching annotations..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching annotations.."))
 	go fetchAnnotations(video, &wg)
-	color.Green("Parsing description, title and thumbnail..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Parsing description, title and thumbnail.."))
 	go parseHTML(video, &wg)
 	wg.Wait()
 	genPath(video)
-	color.Green("Writing informations locally..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Writing informations locally.."))
 	writeFiles(video)
-	color.Green("Downloading thumbnail..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Downloading thumbnail.."))
 	downloadThumbnail(video)
-	color.Green("Fetching subtitles..")
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching subtitles.."))
 	fetchSubsList(video)
+	color.Println(color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving complete!"))
 }
 
 func processList(path string) {
@@ -331,5 +333,5 @@ func argumentParsing(args []string) {
 func main() {
 	start := time.Now()
 	argumentParsing(os.Args[1:])
-	color.Cyan("Done in %s!", time.Since(start))
+	color.Println(color.Cyan("Done in ") + color.Yellow(time.Since(start)) + color.Cyan("!"))
 }
