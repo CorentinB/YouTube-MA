@@ -33,11 +33,13 @@ type Video struct {
 }
 
 // Tracks structure containing all subtitles tracks for the video
-type Tracks struct {
-	Track []struct {
-		ID       string `xml:"id"`
-		LangCode string `xml:"lang_code"`
-	}
+type Tracklist struct {
+	Tracks []Track `xml:"track"`
+}
+
+type Track struct {
+	LangCode string `xml:"lang_code,attr"`
+	Lang     string `xml:"lang_translated,attr"`
 }
 
 func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
@@ -64,7 +66,6 @@ func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
 }
 
 func writeFiles(video *Video) {
-	video.Title = strings.Replace(video.Title, " ", "_", -1)
 	// Write annotations
 	annotationsFile, errAnno := os.Create(video.Path + video.ID + "_" + video.Title + ".annotations.xml")
 	if errAnno != nil {
@@ -114,12 +115,14 @@ func downloadThumbnail(video *Video) {
 	}
 }
 
-func parseDescription(video *Video, document *goquery.Document) {
+func parseDescription(video *Video, document *goquery.Document, workers *sync.WaitGroup) {
+	defer workers.Done()
 	// extract description
 	video.Description = strings.TrimSpace(document.Find("#eow-description").Text())
 }
 
-func parseVariousInfo(video *Video, body []byte) {
+func parseVariousInfo(video *Video, body []byte, workers *sync.WaitGroup) {
+	defer workers.Done()
 	// extract various info json
 	re := regexp.MustCompile("ytplayer.config = (.*?);ytplayer.load")
 	matches := re.FindSubmatch(body)
@@ -135,7 +138,8 @@ func parseVariousInfo(video *Video, body []byte) {
 	video.InfoJSON = string(byteArray[:])
 }
 
-func parseThumbnailURL(video *Video, document *goquery.Document) {
+func parseThumbnailURL(video *Video, document *goquery.Document, workers *sync.WaitGroup) {
+	defer workers.Done()
 	// extract thumbnail url
 	document.Find("meta").Each(func(i int, s *goquery.Selection) {
 		if name, _ := s.Attr("property"); name == "og:image" {
@@ -145,12 +149,17 @@ func parseThumbnailURL(video *Video, document *goquery.Document) {
 	})
 }
 
-func parseTitle(video *Video, document *goquery.Document) {
+func parseTitle(video *Video, document *goquery.Document, workers *sync.WaitGroup) {
+	defer workers.Done()
 	// extract title
-	video.Title = strings.TrimSpace(document.Find("#eow-title").Text())
+	title := strings.TrimSpace(document.Find("#eow-title").Text())
+	video.Title = strings.Replace(title, " ", "_", -1)
 }
 
-func parseHTML(video *Video) {
+func parseHTML(video *Video, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var workers sync.WaitGroup
+	workers.Add(4)
 	// request video html page
 	html, err := http.Get("https://youtube.com/watch?v=" + video.ID)
 	if err != nil {
@@ -166,16 +175,11 @@ func parseHTML(video *Video) {
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
 	}
-	go parseDescription(video, document)
-	go parseVariousInfo(video, body)
-	// extract thumbnail url
-	document.Find("meta").Each(func(i int, s *goquery.Selection) {
-		if name, _ := s.Attr("property"); name == "og:image" {
-			thumbnailURL, _ := s.Attr("content")
-			video.Thumbnail = thumbnailURL
-		}
-	})
-	go parseTitle(video, document)
+	go parseTitle(video, document, &workers)
+	go parseDescription(video, document, &workers)
+	go parseVariousInfo(video, body, &workers)
+	go parseThumbnailURL(video, document, &workers)
+	workers.Wait()
 	defer html.Body.Close()
 }
 
@@ -193,7 +197,35 @@ func genPath(video *Video, wg *sync.WaitGroup) {
 	}
 }
 
-func downloadSubtitles(video *Video) {
+func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	color.Green("Downloading " + lang + " subtitle.." + "[" + langCode + "]")
+	// generate subtitle URL
+	url := "https://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
+	// create the file
+	out, err := os.Create(video.Path + video.ID + "_" + video.Title + "." + langCode + ".xml")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer out.Close()
+	// get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	// write the body to file
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func fetchSubsList(video *Video) {
+	var wg sync.WaitGroup
 	// request subtitles list
 	res, err := http.Get("https://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
 	if err != nil {
@@ -210,11 +242,13 @@ func downloadSubtitles(video *Video) {
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
 	}
-	/*bodyString := string(byteValue)
-	fmt.Println(bodyString)*/
-	var tracks Tracks
+	var tracks Tracklist
 	xml.Unmarshal(data, &tracks)
-	fmt.Println(tracks.Track)
+	wg.Add(len(tracks.Tracks))
+	for _, track := range tracks.Tracks {
+		go downloadSub(video, track.LangCode, track.Lang, &wg)
+	}
+	wg.Wait()
 }
 
 func main() {
@@ -224,17 +258,18 @@ func main() {
 	args := os.Args[1:]
 	video.ID = args[0]
 	color.Green("Archiving ID: " + video.ID)
-	wg.Add(2)
+	wg.Add(3)
 	go genPath(video, &wg)
 	color.Green("Fetching annotations..")
 	go fetchAnnotations(video, &wg)
-	wg.Wait()
 	color.Green("Parsing description, title and thumbnail..")
-	parseHTML(video)
-	color.Green("Downloading thumbnail..")
-	go downloadThumbnail(video)
+	go parseHTML(video, &wg)
+	wg.Wait()
 	color.Green("Writing informations locally..")
-	go writeFiles(video)
-	//downloadSubtitles(video)
+	writeFiles(video)
+	color.Green("Downloading thumbnail..")
+	downloadThumbnail(video)
+	color.Green("Fetching subtitles..")
+	fetchSubsList(video)
 	color.Cyan("Done in %s!", time.Since(start))
 }
