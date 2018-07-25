@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
@@ -251,12 +252,10 @@ func fetchSubsList(video *Video) {
 	wg.Wait()
 }
 
-func main() {
+func processSingleID(ID string) {
 	var wg sync.WaitGroup
-	start := time.Now()
 	video := new(Video)
-	args := os.Args[1:]
-	video.ID = args[0]
+	video.ID = ID
 	color.Green("Archiving ID: " + video.ID)
 	wg.Add(2)
 	color.Green("Fetching annotations..")
@@ -271,5 +270,66 @@ func main() {
 	downloadThumbnail(video)
 	color.Green("Fetching subtitles..")
 	fetchSubsList(video)
+}
+
+func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
+	defer worker.Done()
+	var wg sync.WaitGroup
+	video := new(Video)
+	video.ID = ID
+	color.Green("Archiving ID: " + video.ID)
+	wg.Add(2)
+	color.Green("Fetching annotations..")
+	go fetchAnnotations(video, &wg)
+	color.Green("Parsing description, title and thumbnail..")
+	go parseHTML(video, &wg)
+	wg.Wait()
+	genPath(video)
+	color.Green("Writing informations locally..")
+	writeFiles(video)
+	color.Green("Downloading thumbnail..")
+	downloadThumbnail(video)
+	color.Green("Fetching subtitles..")
+	fetchSubsList(video)
+}
+
+func processList(path string) {
+	// start workers group
+	var wg sync.WaitGroup
+	// open file
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	// scan the list line by line
+	scanner := bufio.NewScanner(file)
+	// count number of IDs
+	for scanner.Scan() {
+		wg.Add(1)
+		go processSingleIDFromList(scanner.Text(), &wg)
+	}
+	// log if error
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+	wg.Wait()
+}
+
+func argumentParsing(args []string) {
+	if len(args) > 1 {
+		color.Red("Usage: ./youtube-ma [ID or list of IDs]")
+		os.Exit(1)
+	}
+	if _, err := os.Stat(args[0]); err == nil {
+		processList(args[0])
+	} else {
+		processSingleID(args[0])
+	}
+}
+
+func main() {
+	start := time.Now()
+	argumentParsing(os.Args[1:])
 	color.Cyan("Done in %s!", time.Since(start))
 }
