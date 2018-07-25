@@ -2,19 +2,24 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
-	"github.com/anaskhan96/soup"
+	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/fatih/color"
 )
 
-// Structure containing all metadata for the video
+// Video structure containing all metadata for the video
 type Video struct {
 	ID          string
 	Title       string
@@ -22,6 +27,7 @@ type Video struct {
 	Thumbnail   string
 	Description string
 	Path        string
+	InfoJSON    string
 }
 
 func fetchAnnotations(video *Video) *Video {
@@ -49,20 +55,30 @@ func fetchAnnotations(video *Video) *Video {
 
 func writeFiles(video *Video) {
 	video.Title = strings.Replace(video.Title, " ", "_", -1)
+	// Write annotations
 	annotationsFile, errAnno := os.Create(video.Path + video.ID + "_" + video.Title + ".annotations.xml")
 	if errAnno != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
 		os.Exit(1)
 	}
 	defer annotationsFile.Close()
+	// Write description
 	descriptionFile, errDescription := os.Create(video.Path + video.ID + "_" + video.Title + ".description")
 	if errDescription != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errDescription)
 		os.Exit(1)
 	}
 	defer descriptionFile.Close()
-	fmt.Fprintf(annotationsFile, video.Annotations)
-	fmt.Fprintf(descriptionFile, video.Description)
+	// Write info json file
+	infoFile, errInfo := os.Create(video.Path + video.ID + "_" + video.Title + ".info.json")
+	if errInfo != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", errInfo)
+		os.Exit(1)
+	}
+	defer infoFile.Close()
+	fmt.Fprintf(annotationsFile, "%s", video.Annotations)
+	fmt.Fprintf(descriptionFile, "%s", video.Description)
+	fmt.Fprintf(infoFile, "%s", video.InfoJSON)
 }
 
 func downloadThumbnail(video *Video) {
@@ -89,32 +105,53 @@ func downloadThumbnail(video *Video) {
 }
 
 func parseHTML(video *Video) *Video {
-	var buffer bytes.Buffer
-	resp, err := soup.Get("https://youtube.com/watch?v=" + video.ID)
+	// request video html page
+	html, err := http.Get("https://youtube.com/watch?v=" + video.ID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Error: %v\n", err)
 	}
-	doc := soup.HTMLParse(resp)
-	description := doc.Find("div", "id", "watch-description-text").FindAll("p")
-	for _, description := range description {
-		buffer.WriteString(description.Text())
+	// check status, exit if != 200
+	if html.StatusCode != 200 {
+		log.Fatalf("Status code error for %s: %d %s", video.ID, html.StatusCode, html.Status)
 	}
-
-	// Parsing thumbnail
-	thumbnail := doc.Find("meta", "property", "og:image")
-	video.Thumbnail = string(thumbnail.Attrs()["content"])
-	// Parsing title
-	title := doc.Find("meta", "property", "og:title")
-	video.Title = strings.Replace(string(title.Attrs()["content"]), " ", "_", -1)
-	// Writing description to the structure
-	video.Description = buffer.String()
+	body, err := ioutil.ReadAll(html.Body)
+	// start goquery in the page
+	document, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
+	if err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
+	// extract description and title
+	video.Description = strings.TrimSpace(document.Find("#eow-description").Text())
+	// extract various info json
+	re := regexp.MustCompile("ytplayer.config = (.*?);ytplayer.load")
+	matches := re.FindSubmatch(body)
+	var jsonConfig map[string]interface{}
+	if len(matches) > 1 {
+		err = json.Unmarshal(matches[1], &jsonConfig)
+		if err != nil {
+			log.Fatalf("Error: %v\n", err)
+		}
+	}
+	// normalize json text and write it into the structure
+	byteArray := norm.NFC.Bytes(matches[1])
+	video.InfoJSON = string(byteArray[:])
+	// extract thumbnail url
+	document.Find("meta").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("property"); name == "og:image" {
+			thumbnailURL, _ := s.Attr("content")
+			video.Thumbnail = thumbnailURL
+		}
+	})
+	// extract title
+	video.Title = strings.TrimSpace(document.Find("#eow-title").Text())
+	defer html.Body.Close()
 	return video
 }
 
 func genPath(video *Video) *Video {
 	firstChar := video.ID[:1]
 	video.Path = firstChar + "/" + video.ID + "/"
+	// create directory if it doesnt exist
 	if _, err := os.Stat(video.Path); os.IsNotExist(err) {
 		err = os.MkdirAll(video.Path, 0755)
 		if err != nil {
