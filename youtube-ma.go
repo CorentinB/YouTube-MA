@@ -45,7 +45,7 @@ type Track struct {
 func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
 	// requesting annotations from YouTube
-	resp, err := http.Get("https://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + video.ID)
+	resp, err := http.Get("http://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + video.ID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -61,8 +61,8 @@ func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
 		annotations := string(bodyBytes)
 		video.Annotations = annotations
 	} else {
-		fmt.Fprintf(os.Stderr, "Error: unable to fetch annotations.\n")
-		os.Exit(1)
+		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" Unable to fetch annotations!"))
+		video.Annotations = "Unable to fetch annotations."
 	}
 }
 
@@ -135,8 +135,13 @@ func parseVariousInfo(video *Video, body []byte, workers *sync.WaitGroup) {
 		}
 	}
 	// normalize json text and write it into the structure
-	byteArray := norm.NFC.Bytes(matches[1])
-	video.InfoJSON = string(byteArray[:])
+	if 1 < len(matches) {
+		byteArray := norm.NFC.Bytes(matches[1])
+		video.InfoJSON = string(byteArray[:])
+	} else {
+		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" Unable to fetch json informations!"))
+		video.InfoJSON = "Unable to fetch infos."
+	}
 }
 
 func parseThumbnailURL(video *Video, document *goquery.Document, workers *sync.WaitGroup) {
@@ -155,6 +160,7 @@ func parseTitle(video *Video, document *goquery.Document, workers *sync.WaitGrou
 	// extract title
 	title := strings.TrimSpace(document.Find("#eow-title").Text())
 	video.Title = strings.Replace(title, " ", "_", -1)
+	video.Title = strings.Replace(video.Title, "/", "_", -1)
 }
 
 func parseHTML(video *Video, wg *sync.WaitGroup) {
@@ -162,7 +168,7 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	var workers sync.WaitGroup
 	workers.Add(4)
 	// request video html page
-	html, err := http.Get("https://youtube.com/watch?v=" + video.ID)
+	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&bpctr=1532537335")
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
 	}
@@ -201,7 +207,7 @@ func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup)
 	defer wg.Done()
 	color.Green("Downloading " + lang + " subtitle.." + "[" + langCode + "]")
 	// generate subtitle URL
-	url := "https://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
+	url := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
 	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Downloading ") + color.Yellow(lang) + color.Green(" subtitle.."))
 	// get the data
 	resp, err := http.Get(url)
@@ -228,7 +234,7 @@ func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup)
 func fetchSubsList(video *Video) {
 	var wg sync.WaitGroup
 	// request subtitles list
-	res, err := http.Get("https://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
+	res, err := http.Get("http://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
 	}
