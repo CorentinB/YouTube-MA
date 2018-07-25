@@ -202,7 +202,7 @@ func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup)
 	color.Green("Downloading " + lang + " subtitle.." + "[" + langCode + "]")
 	// generate subtitle URL
 	url := "https://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching ") + color.Yellow(lang) + color.Green(" subtitle.."))
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Downloading ") + color.Yellow(lang) + color.Green(" subtitle.."))
 	// get the data
 	resp, err := http.Get(url)
 	if err != nil {
