@@ -296,6 +296,7 @@ func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
 }
 
 func processList(path string) {
+	var count int
 	// start workers group
 	var wg sync.WaitGroup
 	// open file
@@ -308,8 +309,13 @@ func processList(path string) {
 	scanner := bufio.NewScanner(file)
 	// count number of IDs
 	for scanner.Scan() {
+		count++
 		wg.Add(1)
 		go processSingleIDFromList(scanner.Text(), &wg)
+		if count == 32 {
+			wg.Wait()
+			count = 0
+		}
 	}
 	// log if error
 	if err := scanner.Err(); err != nil {
