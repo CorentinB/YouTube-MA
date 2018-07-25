@@ -18,4 +18,6 @@ But you can also use a list of IDs, be carefull to have an ID per line, no compl
 ./youtube-ma my_list.txt
 ```
 
-![example](https://image.noelshack.com/fichiers/2018/30/3/1532529328-selection-354.png)
+# Example
+
+![example](https://image.noelshack.com/fichiers/2018/30/3/1532529549-selection-355.png)
