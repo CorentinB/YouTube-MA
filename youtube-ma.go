@@ -184,8 +184,7 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	defer html.Body.Close()
 }
 
-func genPath(video *Video, wg *sync.WaitGroup) {
-	defer wg.Done()
+func genPath(video *Video) {
 	firstChar := video.ID[:1]
 	video.Path = firstChar + "/" + video.ID + "/"
 	// create directory if it doesnt exist
@@ -259,13 +258,13 @@ func main() {
 	args := os.Args[1:]
 	video.ID = args[0]
 	color.Green("Archiving ID: " + video.ID)
-	wg.Add(3)
-	go genPath(video, &wg)
+	wg.Add(2)
 	color.Green("Fetching annotations..")
 	go fetchAnnotations(video, &wg)
 	color.Green("Parsing description, title and thumbnail..")
 	go parseHTML(video, &wg)
 	wg.Wait()
+	genPath(video)
 	color.Green("Writing informations locally..")
 	writeFiles(video)
 	color.Green("Downloading thumbnail..")
