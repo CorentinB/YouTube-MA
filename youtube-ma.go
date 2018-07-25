@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -48,7 +49,7 @@ func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
 	resp, err := http.Get("http://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + video.ID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 	defer resp.Body.Close()
 	// checking response status code
@@ -56,7 +57,7 @@ func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
 		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
 		if err2 != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			runtime.Goexit()
 		}
 		annotations := string(bodyBytes)
 		video.Annotations = annotations
@@ -71,21 +72,21 @@ func writeFiles(video *Video) {
 	annotationsFile, errAnno := os.Create(video.Path + video.ID + "_" + video.Title + ".annotations.xml")
 	if errAnno != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 	defer annotationsFile.Close()
 	// write description
 	descriptionFile, errDescription := os.Create(video.Path + video.ID + "_" + video.Title + ".description")
 	if errDescription != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errDescription)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 	defer descriptionFile.Close()
 	// write info json file
 	infoFile, errInfo := os.Create(video.Path + video.ID + "_" + video.Title + ".info.json")
 	if errInfo != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errInfo)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 	defer infoFile.Close()
 	fmt.Fprintf(annotationsFile, "%s", video.Annotations)
@@ -94,25 +95,30 @@ func writeFiles(video *Video) {
 }
 
 func downloadThumbnail(video *Video) {
+	if len(video.Thumbnail) < 1 {
+		os.RemoveAll(video.Path)
+		runtime.Goexit()
+	}
 	// create the file
 	out, err := os.Create(video.Path + video.ID + "_" + video.Title + ".jpg")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 	defer out.Close()
 	// get the data
 	resp, err := http.Get(video.Thumbnail)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		os.RemoveAll(video.Path)
+		runtime.Goexit()
 	}
 	defer resp.Body.Close()
 	// write the body to file
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 }
 
@@ -141,6 +147,7 @@ func parseVariousInfo(video *Video, body []byte, workers *sync.WaitGroup) {
 	} else {
 		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" Unable to fetch json informations!"))
 		video.InfoJSON = "Unable to fetch infos."
+		runtime.Goexit()
 	}
 }
 
@@ -150,7 +157,7 @@ func parseThumbnailURL(video *Video, document *goquery.Document, workers *sync.W
 	document.Find("meta").Each(func(i int, s *goquery.Selection) {
 		if name, _ := s.Attr("property"); name == "og:image" {
 			thumbnailURL, _ := s.Attr("content")
-			video.Thumbnail = thumbnailURL
+			video.Thumbnail = strings.Replace(thumbnailURL, "https", "http", -1)
 		}
 	})
 }
@@ -171,16 +178,22 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&bpctr=1532537335")
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
+		os.RemoveAll(video.Path)
+		runtime.Goexit()
 	}
 	// check status, exit if != 200
 	if html.StatusCode != 200 {
 		log.Fatalf("Status code error for %s: %d %s", video.ID, html.StatusCode, html.Status)
+		os.RemoveAll(video.Path)
+		runtime.Goexit()
 	}
 	body, err := ioutil.ReadAll(html.Body)
 	// start goquery in the page
 	document, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
+		os.RemoveAll(video.Path)
+		runtime.Goexit()
 	}
 	go parseTitle(video, document, &workers)
 	go parseDescription(video, document, &workers)
@@ -198,7 +211,7 @@ func genPath(video *Video) {
 		err = os.MkdirAll(video.Path, 0755)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			runtime.Goexit()
 		}
 	}
 }
@@ -213,21 +226,21 @@ func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup)
 	resp, err := http.Get(url)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 	defer resp.Body.Close()
 	// create the file
 	out, err := os.Create(video.Path + video.ID + "_" + video.Title + "." + langCode + ".xml")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 	defer out.Close()
 	// write the body to file
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		runtime.Goexit()
 	}
 }
 
@@ -258,7 +271,8 @@ func fetchSubsList(video *Video) {
 	wg.Wait()
 }
 
-func processSingleID(ID string) {
+func processSingleID(ID string, worker *sync.WaitGroup) {
+	defer worker.Done()
 	var wg sync.WaitGroup
 	video := new(Video)
 	video.ID = ID
@@ -301,7 +315,8 @@ func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
 	color.Println(color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving complete!"))
 }
 
-func processList(path string) {
+func processList(path string, worker *sync.WaitGroup) {
+	defer worker.Done()
 	var count int
 	// start workers group
 	var wg sync.WaitGroup
@@ -331,15 +346,19 @@ func processList(path string) {
 }
 
 func argumentParsing(args []string) {
+	// start workers group
+	var wg sync.WaitGroup
+	wg.Add(1)
 	if len(args) > 1 {
 		color.Red("Usage: ./youtube-ma [ID or list of IDs]")
 		os.Exit(1)
 	}
 	if _, err := os.Stat(args[0]); err == nil {
-		processList(args[0])
+		go processList(args[0], &wg)
 	} else {
-		processSingleID(args[0])
+		go processSingleID(args[0], &wg)
 	}
+	wg.Wait()
 }
 
 func main() {
