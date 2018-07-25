@@ -44,14 +44,14 @@ type Track struct {
 
 func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
-	// Requesting annotations from YouTube
+	// requesting annotations from YouTube
 	resp, err := http.Get("https://www.youtube.com/annotations_invideo?features=1&legacy=1&video_id=" + video.ID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
-	// Checking response status code
+	// checking response status code
 	if resp.StatusCode == http.StatusOK {
 		bodyBytes, err2 := ioutil.ReadAll(resp.Body)
 		if err2 != nil {
@@ -61,26 +61,27 @@ func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
 		annotations := string(bodyBytes)
 		video.Annotations = annotations
 	} else {
-		color.Red("Error: unable to fetch annotations.")
+		fmt.Fprintf(os.Stderr, "Error: unable to fetch annotations.\n")
+		os.Exit(1)
 	}
 }
 
 func writeFiles(video *Video) {
-	// Write annotations
+	// write annotations
 	annotationsFile, errAnno := os.Create(video.Path + video.ID + "_" + video.Title + ".annotations.xml")
 	if errAnno != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
 		os.Exit(1)
 	}
 	defer annotationsFile.Close()
-	// Write description
+	// write description
 	descriptionFile, errDescription := os.Create(video.Path + video.ID + "_" + video.Title + ".description")
 	if errDescription != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errDescription)
 		os.Exit(1)
 	}
 	defer descriptionFile.Close()
-	// Write info json file
+	// write info json file
 	infoFile, errInfo := os.Create(video.Path + video.ID + "_" + video.Title + ".info.json")
 	if errInfo != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", errInfo)
@@ -93,21 +94,21 @@ func writeFiles(video *Video) {
 }
 
 func downloadThumbnail(video *Video) {
-	// Create the file
+	// create the file
 	out, err := os.Create(video.Path + video.ID + "_" + video.Title + ".jpg")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer out.Close()
-	// Get the data
+	// get the data
 	resp, err := http.Get(video.Thumbnail)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
-	// Write the body to file
+	// write the body to file
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
