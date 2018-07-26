@@ -54,7 +54,7 @@ type infoJSON struct {
 	UploaderID        string                `json:"uploader_id"`
 	UploaderURL       string                `json:"uploader_url"`
 	UploadDate        string                `json:"upload_date"`
-	License           string                `json:"license"`
+	License           string                `json:"license,omitempty"`
 	Creator           string                `json:"creator"`
 	Title             string                `json:"title"`
 	AltTitle          string                `json:"alt_title"`
@@ -220,17 +220,6 @@ func parseUploaderInfo(video *Video, document *goquery.Document, wg *sync.WaitGr
 	})
 }
 
-func parseLicense(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
-	// WIP
-	defer wg.Done()
-	/*pattern, _ := regexp.Compile(`(?s)<h4[^>]*>\s*License\s*</h4>\s*<ul[^>]*>(.*?)</ul>`)
-	if pattern.MatchString(video.RawHTML) == true {
-		fmt.Println("Match License")
-	} else {
-		fmt.Println("No match License")
-	}*/
-}
-
 func parseLikeDislike(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 	defer wg.Done()
 	document.Find("button").Each(func(i int, s *goquery.Selection) {
@@ -305,6 +294,19 @@ func parseCategory(video *Video, document *goquery.Document, wg *sync.WaitGroup)
 		panic(err)
 	}
 	video.InfoJSON.Category = doc.Find("a").Text()
+}
+
+func parseLicense(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	pattern, _ := regexp.Compile(`<h4[^>]+class="title"[^>]*>\s*License\s*</h4>\s*<ul[^>]*>\s*<li>(.+?)</li`)
+	m := pattern.FindAllStringSubmatch(video.RawHTML, -1)
+	if len(m) == 1 && len(m[0]) == 2 {
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(m[0][1]))
+		if err != nil {
+			panic(err)
+		}
+		video.InfoJSON.License = doc.Find("a").Text()
+	}
 }
 
 func parseVariousInfo(video *Video, document *goquery.Document) {
