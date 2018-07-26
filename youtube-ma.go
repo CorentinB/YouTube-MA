@@ -208,7 +208,7 @@ func parseUploaderInfo(video *Video, document *goquery.Document, wg *sync.WaitGr
 	document.Find("a").Each(func(i int, s *goquery.Selection) {
 		if name, _ := s.Attr("class"); name == "yt-uix-sessionlink       spf-link " {
 			uploader := s.Text()
-			if strings.Contains(uploader, "https://www.youtube.com/watch?v=") == false {
+			if strings.Contains(uploader, "https://www.youtube.com/watch?v=") == false && strings.Contains(uploader, "https://youtu.be") == false {
 				video.InfoJSON.Uploader = uploader
 			}
 			uploaderID, _ := s.Attr("href")
