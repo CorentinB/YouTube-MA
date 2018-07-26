@@ -223,7 +223,7 @@ func parseUploaderInfo(video *Video, document *goquery.Document, wg *sync.WaitGr
 func parseLicense(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 	// WIP
 	defer wg.Done()
-	/*pattern, _ := regexp.Compile(`(?s)<h4[^>]*>\s*Category\s*</h4>\s*<ul[^>]*>(.*?)</ul>`)
+	/*pattern, _ := regexp.Compile(`(?s)<h4[^>]*>\s*License\s*</h4>\s*<ul[^>]*>(.*?)</ul>`)
 	if pattern.MatchString(video.RawHTML) == true {
 		fmt.Println("Match License")
 	} else {
@@ -298,12 +298,13 @@ func parseTags(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 
 func parseCategory(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 	defer wg.Done()
-	document.Find("a").Each(func(i int, s *goquery.Selection) {
-		if name, _ := s.Attr("class"); name == " yt-uix-sessionlink      spf-link " {
-			video.InfoJSON.Category = s.Text()
-			runtime.Goexit()
-		}
-	})
+	pattern, _ := regexp.Compile(`(?s)<h4[^>]*>\s*Category\s*</h4>\s*<ul[^>]*>(.*?)</ul>`)
+	m := pattern.FindAllStringSubmatch(video.RawHTML, -1)
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(m[0][1]))
+	if err != nil {
+		panic(err)
+	}
+	video.InfoJSON.Category = doc.Find("a").Text()
 }
 
 func parseVariousInfo(video *Video, document *goquery.Document) {
@@ -350,7 +351,7 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	var workers sync.WaitGroup
 	workers.Add(3)
 	// request video html page
-	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&bpctr=1532537335")
+	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
 		os.RemoveAll(video.Path)
