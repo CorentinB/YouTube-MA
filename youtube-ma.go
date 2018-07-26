@@ -11,15 +11,16 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/spf13/cast"
+	"github.com/wuriyanto48/replacer"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/labstack/gommon/color"
-	"golang.org/x/text/unicode/norm"
 )
 
 // Video structure containing all metadata for the video
@@ -30,17 +31,82 @@ type Video struct {
 	Thumbnail   string
 	Description string
 	Path        string
-	InfoJSON    string
+	InfoJSON    infoJSON
 }
 
-// Tracks structure containing all subtitles tracks for the video
+// Tracklist structure containing all subtitles tracks for the video
 type Tracklist struct {
 	Tracks []Track `xml:"track"`
 }
 
+// Track structure for data about single subtitle
 type Track struct {
 	LangCode string `xml:"lang_code,attr"`
 	Lang     string `xml:"lang_translated,attr"`
+}
+
+// infoJSON structure containing the generated json data
+type infoJSON struct {
+	ID                string   `json:"id"`
+	Uploader          string   `json:"uploader"`
+	UploaderID        string   `json:"uploader_id"`
+	UploaderURL       string   `json:"uploader_url"`
+	UploadDate        string   `json:"upload_date"`
+	License           string   `json:"license"`
+	Creator           string   `json:"creator"`
+	Title             string   `json:"title"`
+	AltTitle          string   `json:"alt_title"`
+	Thumbnail         string   `json:"thumbnail"`
+	Description       string   `json:"description"`
+	Categories        []string `json:"categories"`
+	Tags              []string `json:"tags"`
+	Subtitles         string   `json:"subtitles"`
+	AutomaticCaptions string   `json:"automatic_captions"`
+	Duration          float64  `json:"duration"`
+	AgeLimit          float64  `json:"age_limit"`
+	Annotations       string   `json:"annotations"`
+	Chapters          string   `json:"chapters"`
+	WebpageURL        string   `json:"webpage_url"`
+	ViewCount         float64  `json:"view_count"`
+	LikeCount         float64  `json:"like_count"`
+	DislikeCount      float64  `json:"dislike_count"`
+	AverageRating     float64  `json:"average_rating"`
+	Formats           []Format `json:"formats"`
+}
+
+// Format structure for all different formats informations
+type Format struct {
+	FormatID          string          `json:"format_id"`
+	URL               string          `json:"url"`
+	PlayerURL         string          `json:"player_URL"`
+	Ext               string          `json:"ext"`
+	Height            float64         `json:"height"`
+	FormatNote        string          `json:"format_note"`
+	Acodec            string          `json:"acodec"`
+	Abr               float64         `json:"abr"`
+	FileSize          float64         `json:"filesize"`
+	Tbr               float64         `json:"tbr"`
+	Width             float64         `json:"width"`
+	Fps               float64         `json:"fps"`
+	Vcodec            string          `json:"vcodec"`
+	DownloaderOptions []DownloaderOpt `json:"downloader_options"`
+	Format            string          `json:"format"`
+	Protocol          string          `json:"protocol"`
+	HTTPHeader        []HTTPHeaders   `json:"http_headers"`
+}
+
+// DownloaderOpt structure containing downloader options
+type DownloaderOpt struct {
+	HttpChunkSize float64 `json:"http_chunk_size"`
+}
+
+// HTTPHeaders containing the HTTPHeader for each format of video
+type HTTPHeaders struct {
+	UserAgent      string `json:"User-Agent"`
+	AcceptCharset  string `json:"Accept-Charset"`
+	Accept         string `json:"Accept"`
+	AcceptEncoding string `json:"Accept-Encoding"`
+	AcceptLanguage string `json:"Accept-Language"`
 }
 
 func fetchAnnotations(video *Video, wg *sync.WaitGroup) {
@@ -91,7 +157,8 @@ func writeFiles(video *Video) {
 	defer infoFile.Close()
 	fmt.Fprintf(annotationsFile, "%s", video.Annotations)
 	fmt.Fprintf(descriptionFile, "%s", video.Description)
-	fmt.Fprintf(infoFile, "%s", video.InfoJSON)
+	JSON, _ := json.MarshalIndent(video.InfoJSON, "", "  ")
+	fmt.Fprintf(infoFile, "%s", string(JSON))
 }
 
 func downloadThumbnail(video *Video) {
@@ -128,27 +195,61 @@ func parseDescription(video *Video, document *goquery.Document, workers *sync.Wa
 	video.Description = strings.TrimSpace(document.Find("#eow-description").Text())
 }
 
-func parseVariousInfo(video *Video, body []byte, workers *sync.WaitGroup) {
-	defer workers.Done()
-	// extract various info json
-	re := regexp.MustCompile("ytplayer.config = (.*?);ytplayer.load")
-	matches := re.FindSubmatch(body)
-	var jsonConfig map[string]interface{}
-	if len(matches) > 1 {
-		err := json.Unmarshal(matches[1], &jsonConfig)
-		if err != nil {
-			log.Fatalf("Error: %v\n", err)
+func parseUploaderInfo(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	document.Find("a").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("class"); name == "yt-uix-sessionlink       spf-link " {
+			uploader := s.Text()
+			if strings.Contains(uploader, "https://www.youtube.com/watch?v=") == false {
+				video.InfoJSON.Uploader = uploader
+			}
+			uploaderID, _ := s.Attr("href")
+			if strings.Contains(uploaderID, "/channel/") == true {
+				video.InfoJSON.UploaderID = uploaderID[9:len(uploaderID)]
+				video.InfoJSON.UploaderURL = "https://www.youtube.com" + uploaderID
+			}
 		}
-	}
-	// normalize json text and write it into the structure
-	if 1 < len(matches) {
-		byteArray := norm.NFC.Bytes(matches[1])
-		video.InfoJSON = string(byteArray[:])
-	} else {
-		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" Unable to fetch json informations!"))
-		video.InfoJSON = "Unable to fetch infos."
-		runtime.Goexit()
-	}
+	})
+}
+
+func parseLikeDislike(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	document.Find("button").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("class"); name == "yt-uix-button yt-uix-button-size-default yt-uix-button-opacity yt-uix-button-has-icon no-icon-markup like-button-renderer-like-button like-button-renderer-like-button-clicked yt-uix-button-toggled  hid yt-uix-tooltip" {
+			likeCount := s.Text()
+			video.InfoJSON.LikeCount = cast.ToFloat64(replacer.Replace(likeCount, ""))
+		}
+	})
+	document.Find("button").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("class"); name == "yt-uix-button yt-uix-button-size-default yt-uix-button-opacity yt-uix-button-has-icon no-icon-markup like-button-renderer-dislike-button like-button-renderer-dislike-button-unclicked yt-uix-clickcard-target   yt-uix-tooltip" {
+			dislikeCount := s.Text()
+			video.InfoJSON.DislikeCount = cast.ToFloat64(replacer.Replace(dislikeCount, ""))
+		}
+	})
+}
+
+func parseDatePublished(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	document.Find("meta").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("itemprop"); name == "datePublished" {
+			video.InfoJSON.UploadDate, _ = s.Attr("content")
+		}
+	})
+}
+
+func parseVariousInfo(video *Video, document *goquery.Document) {
+	var wg sync.WaitGroup
+	wg.Add(3)
+	video.InfoJSON.ID = video.ID
+	video.InfoJSON.Description = video.Description
+	video.InfoJSON.Title = video.Title
+	video.InfoJSON.Annotations = video.Annotations
+	video.InfoJSON.Thumbnail = video.Thumbnail
+	video.InfoJSON.WebpageURL = "https://www.youtube.com/watch?v=" + video.ID
+	go parseUploaderInfo(video, document, &wg)
+	go parseLikeDislike(video, document, &wg)
+	go parseDatePublished(video, document, &wg)
+	wg.Wait()
 }
 
 func parseThumbnailURL(video *Video, document *goquery.Document, workers *sync.WaitGroup) {
@@ -173,7 +274,7 @@ func parseTitle(video *Video, document *goquery.Document, workers *sync.WaitGrou
 func parseHTML(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var workers sync.WaitGroup
-	workers.Add(4)
+	workers.Add(3)
 	// request video html page
 	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&bpctr=1532537335")
 	if err != nil {
@@ -197,9 +298,9 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	}
 	go parseTitle(video, document, &workers)
 	go parseDescription(video, document, &workers)
-	go parseVariousInfo(video, body, &workers)
 	go parseThumbnailURL(video, document, &workers)
 	workers.Wait()
+	parseVariousInfo(video, document)
 	defer html.Body.Close()
 }
 
