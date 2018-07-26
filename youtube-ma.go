@@ -49,31 +49,36 @@ type Track struct {
 
 // infoJSON structure containing the generated json data
 type infoJSON struct {
-	ID                string   `json:"id"`
-	Uploader          string   `json:"uploader"`
-	UploaderID        string   `json:"uploader_id"`
-	UploaderURL       string   `json:"uploader_url"`
-	UploadDate        string   `json:"upload_date"`
-	License           string   `json:"license"`
-	Creator           string   `json:"creator"`
-	Title             string   `json:"title"`
-	AltTitle          string   `json:"alt_title"`
-	Thumbnail         string   `json:"thumbnail"`
-	Description       string   `json:"description"`
-	Category          string   `json:"category"`
-	Tags              []string `json:"tags"`
-	Subtitles         string   `json:"subtitles"`
-	AutomaticCaptions string   `json:"automatic_captions"`
-	Duration          float64  `json:"duration"`
-	AgeLimit          float64  `json:"age_limit"`
-	Annotations       string   `json:"annotations"`
-	Chapters          string   `json:"chapters"`
-	WebpageURL        string   `json:"webpage_url"`
-	ViewCount         float64  `json:"view_count"`
-	LikeCount         float64  `json:"like_count"`
-	DislikeCount      float64  `json:"dislike_count"`
-	AverageRating     float64  `json:"average_rating"`
-	Formats           []Format `json:"formats"`
+	ID                string                `json:"id"`
+	Uploader          string                `json:"uploader"`
+	UploaderID        string                `json:"uploader_id"`
+	UploaderURL       string                `json:"uploader_url"`
+	UploadDate        string                `json:"upload_date"`
+	License           string                `json:"license"`
+	Creator           string                `json:"creator"`
+	Title             string                `json:"title"`
+	AltTitle          string                `json:"alt_title"`
+	Thumbnail         string                `json:"thumbnail"`
+	Description       string                `json:"description"`
+	Category          string                `json:"category"`
+	Tags              []string              `json:"tags"`
+	Subtitles         map[string][]Subtitle `json:"subtitles"`
+	AutomaticCaptions string                `json:"automatic_captions"`
+	Duration          float64               `json:"duration"`
+	AgeLimit          float64               `json:"age_limit"`
+	Annotations       string                `json:"annotations"`
+	Chapters          string                `json:"chapters"`
+	WebpageURL        string                `json:"webpage_url"`
+	ViewCount         float64               `json:"view_count"`
+	LikeCount         float64               `json:"like_count"`
+	DislikeCount      float64               `json:"dislike_count"`
+	AverageRating     float64               `json:"average_rating"`
+	Formats           []Format              `json:"formats"`
+}
+
+type Subtitle struct {
+	URL string
+	ext string
 }
 
 // Format structure for all different formats informations
@@ -387,8 +392,19 @@ func genPath(video *Video) {
 	}
 }
 
+func addSubToJSON(video *Video, langCode string) {
+	urlXML := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
+	urlTTML := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID + "&fmt=ttml&name="
+	urlVTT := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID + "&fmt=vtt&name="
+	if video.InfoJSON.Subtitles == nil {
+		video.InfoJSON.Subtitles = make(map[string][]Subtitle)
+	}
+	video.InfoJSON.Subtitles[langCode] = append(video.InfoJSON.Subtitles[langCode], Subtitle{urlXML, "xml"}, Subtitle{urlTTML, "ttml"}, Subtitle{urlVTT, "vtt"})
+}
+
 func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup) {
 	defer wg.Done()
+	addSubToJSON(video, langCode)
 	color.Green("Downloading " + lang + " subtitle.." + "[" + langCode + "]")
 	// generate subtitle URL
 	url := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
