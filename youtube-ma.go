@@ -64,17 +64,17 @@ type infoJSON struct {
 	Tags              []string              `json:"tags"`
 	Subtitles         map[string][]Subtitle `json:"subtitles"`
 	subLock           sync.Mutex
-	AutomaticCaptions string                `json:"automatic_captions"`
-	Duration          float64               `json:"duration"`
-	AgeLimit          float64               `json:"age_limit"`
-	Annotations       string                `json:"annotations"`
-	Chapters          string                `json:"chapters"`
-	WebpageURL        string                `json:"webpage_url"`
-	ViewCount         float64               `json:"view_count"`
-	LikeCount         float64               `json:"like_count"`
-	DislikeCount      float64               `json:"dislike_count"`
-	AverageRating     float64               `json:"average_rating"`
-	Formats           []Format              `json:"formats"`
+	AutomaticCaptions string   `json:"automatic_captions"`
+	Duration          float64  `json:"duration"`
+	AgeLimit          float64  `json:"age_limit"`
+	Annotations       string   `json:"annotations"`
+	Chapters          string   `json:"chapters"`
+	WebpageURL        string   `json:"webpage_url"`
+	ViewCount         float64  `json:"view_count"`
+	LikeCount         float64  `json:"like_count"`
+	DislikeCount      float64  `json:"dislike_count"`
+	AverageRating     float64  `json:"average_rating"`
+	Formats           []Format `json:"formats"`
 }
 
 type Subtitle struct {
@@ -311,7 +311,6 @@ func parseVariousInfo(video *Video, document *goquery.Document) {
 	wg.Add(8)
 	video.InfoJSON.ID = video.ID
 	video.InfoJSON.Description = video.Description
-	video.InfoJSON.Title = video.Title
 	video.InfoJSON.Annotations = video.Annotations
 	video.InfoJSON.Thumbnail = video.Thumbnail
 	video.InfoJSON.WebpageURL = "https://www.youtube.com/watch?v=" + video.ID
@@ -341,6 +340,7 @@ func parseTitle(video *Video, document *goquery.Document, workers *sync.WaitGrou
 	defer workers.Done()
 	// extract title
 	title := strings.TrimSpace(document.Find("#eow-title").Text())
+	video.InfoJSON.Title = title
 	video.Title = strings.Replace(title, " ", "_", -1)
 	video.Title = strings.Replace(video.Title, "/", "_", -1)
 }
