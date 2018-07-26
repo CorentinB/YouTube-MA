@@ -63,6 +63,7 @@ type infoJSON struct {
 	Category          string                `json:"category"`
 	Tags              []string              `json:"tags"`
 	Subtitles         map[string][]Subtitle `json:"subtitles"`
+	subLock           sync.Mutex
 	AutomaticCaptions string                `json:"automatic_captions"`
 	Duration          float64               `json:"duration"`
 	AgeLimit          float64               `json:"age_limit"`
@@ -77,8 +78,8 @@ type infoJSON struct {
 }
 
 type Subtitle struct {
-	URL string
-	ext string
+	URL string `json:"url"`
+	Ext string `json:"ext"`
 }
 
 // Format structure for all different formats informations
@@ -396,10 +397,9 @@ func addSubToJSON(video *Video, langCode string) {
 	urlXML := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
 	urlTTML := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID + "&fmt=ttml&name="
 	urlVTT := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID + "&fmt=vtt&name="
-	if video.InfoJSON.Subtitles == nil {
-		video.InfoJSON.Subtitles = make(map[string][]Subtitle)
-	}
+	video.InfoJSON.subLock.Lock()
 	video.InfoJSON.Subtitles[langCode] = append(video.InfoJSON.Subtitles[langCode], Subtitle{urlXML, "xml"}, Subtitle{urlTTML, "ttml"}, Subtitle{urlVTT, "vtt"})
+	video.InfoJSON.subLock.Unlock()
 }
 
 func downloadSub(video *Video, langCode string, lang string, wg *sync.WaitGroup) {
@@ -463,6 +463,7 @@ func processSingleID(ID string, worker *sync.WaitGroup) {
 	var wg sync.WaitGroup
 	video := new(Video)
 	video.ID = ID
+	video.InfoJSON.Subtitles = make(map[string][]Subtitle)
 	color.Println(color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving started."))
 	wg.Add(2)
 	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching annotations.."))
@@ -471,12 +472,12 @@ func processSingleID(ID string, worker *sync.WaitGroup) {
 	go parseHTML(video, &wg)
 	wg.Wait()
 	genPath(video)
+	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching subtitles.."))
+	fetchSubsList(video)
 	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Writing informations locally.."))
 	writeFiles(video)
 	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Downloading thumbnail.."))
 	downloadThumbnail(video)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching subtitles.."))
-	fetchSubsList(video)
 	color.Println(color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving complete!"))
 }
 
