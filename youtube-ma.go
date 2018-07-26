@@ -165,7 +165,7 @@ func writeFiles(video *Video) {
 	defer infoFile.Close()
 	fmt.Fprintf(annotationsFile, "%s", video.Annotations)
 	fmt.Fprintf(descriptionFile, "%s", video.Description)
-	JSON, _ := json.MarshalIndent(video.InfoJSON, "", "  ")
+	JSON, _ := JsonMarshalIndentNoEscapeHTML(video.InfoJSON, "", "  ")
 	fmt.Fprintf(infoFile, "%s", string(JSON))
 }
 
@@ -547,6 +547,15 @@ func argumentParsing(args []string) {
 		go processSingleID(args[0], &wg)
 	}
 	wg.Wait()
+}
+
+func JsonMarshalIndentNoEscapeHTML(i interface{}, prefix string, indent string) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent(prefix, indent)
+	err := encoder.Encode(i)
+	return buf.Bytes(), err
 }
 
 func main() {
