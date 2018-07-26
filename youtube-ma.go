@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ type Video struct {
 	Thumbnail   string
 	Description string
 	Path        string
+	RawHTML     string
 	InfoJSON    infoJSON
 }
 
@@ -212,6 +214,17 @@ func parseUploaderInfo(video *Video, document *goquery.Document, wg *sync.WaitGr
 	})
 }
 
+func parseLicense(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	// WIP
+	defer wg.Done()
+	/*pattern, _ := regexp.Compile(`(?s)<h4[^>]*>\s*Category\s*</h4>\s*<ul[^>]*>(.*?)</ul>`)
+	if pattern.MatchString(video.RawHTML) == true {
+		fmt.Println("Match License")
+	} else {
+		fmt.Println("No match License")
+	}*/
+}
+
 func parseLikeDislike(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 	defer wg.Done()
 	document.Find("button").Each(func(i int, s *goquery.Selection) {
@@ -232,14 +245,44 @@ func parseDatePublished(video *Video, document *goquery.Document, wg *sync.WaitG
 	defer wg.Done()
 	document.Find("meta").Each(func(i int, s *goquery.Selection) {
 		if name, _ := s.Attr("itemprop"); name == "datePublished" {
-			video.InfoJSON.UploadDate, _ = s.Attr("content")
+			date, _ := s.Attr("content")
+			date = strings.Replace(date, "-", "", -1)
+			video.InfoJSON.UploadDate = date
 		}
 	})
 }
 
+func parseViewCount(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	document.Find("div").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("class"); name == "watch-view-count" {
+			viewCount := s.Text()
+			reg, err := regexp.Compile("[^0-9]+")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				runtime.Goexit()
+			}
+			video.InfoJSON.ViewCount = cast.ToFloat64(reg.ReplaceAllString(viewCount, ""))
+		}
+	})
+}
+
+func parseAverageRating(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	/*document.Find("script ").Each(func(i int, s *goquery.Selection) {
+		if strings.Contains(s.Text(), "avg_rating") == true {
+			ytPlayer := s.Text()
+			pattern := regexp.MustCompile(`\(([^\)]+)\)`) // anything in parentheses
+			match := pattern.FindAllStringSubmatch(ytPlayer, 1)
+			fmt.Printf("%#v\n", match) // see the structure of what is being returned
+			fmt.Println("result: ", match[0][1])
+		}
+	})*/
+}
+
 func parseVariousInfo(video *Video, document *goquery.Document) {
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(6)
 	video.InfoJSON.ID = video.ID
 	video.InfoJSON.Description = video.Description
 	video.InfoJSON.Title = video.Title
@@ -249,6 +292,9 @@ func parseVariousInfo(video *Video, document *goquery.Document) {
 	go parseUploaderInfo(video, document, &wg)
 	go parseLikeDislike(video, document, &wg)
 	go parseDatePublished(video, document, &wg)
+	go parseLicense(video, document, &wg)
+	go parseViewCount(video, document, &wg)
+	go parseAverageRating(video, document, &wg)
 	wg.Wait()
 }
 
@@ -289,6 +335,8 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 		runtime.Goexit()
 	}
 	body, err := ioutil.ReadAll(html.Body)
+	// store raw html in video struct
+	video.RawHTML = string(body)
 	// start goquery in the page
 	document, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
