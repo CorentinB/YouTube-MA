@@ -60,7 +60,7 @@ type infoJSON struct {
 	AltTitle          string   `json:"alt_title"`
 	Thumbnail         string   `json:"thumbnail"`
 	Description       string   `json:"description"`
-	Categories        []string `json:"categories"`
+	Category          string   `json:"category"`
 	Tags              []string `json:"tags"`
 	Subtitles         string   `json:"subtitles"`
 	AutomaticCaptions string   `json:"automatic_captions"`
@@ -280,9 +280,29 @@ func parseAverageRating(video *Video, document *goquery.Document, wg *sync.WaitG
 	})*/
 }
 
+func parseTags(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	document.Find("meta").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("property"); name == "og:video:tag" {
+			tag, _ := s.Attr("content")
+			video.InfoJSON.Tags = append(video.InfoJSON.Tags, tag)
+		}
+	})
+}
+
+func parseCategory(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+	defer wg.Done()
+	document.Find("a").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("class"); name == " yt-uix-sessionlink      spf-link " {
+			video.InfoJSON.Category = s.Text()
+			runtime.Goexit()
+		}
+	})
+}
+
 func parseVariousInfo(video *Video, document *goquery.Document) {
 	var wg sync.WaitGroup
-	wg.Add(6)
+	wg.Add(8)
 	video.InfoJSON.ID = video.ID
 	video.InfoJSON.Description = video.Description
 	video.InfoJSON.Title = video.Title
@@ -295,6 +315,8 @@ func parseVariousInfo(video *Video, document *goquery.Document) {
 	go parseLicense(video, document, &wg)
 	go parseViewCount(video, document, &wg)
 	go parseAverageRating(video, document, &wg)
+	go parseTags(video, document, &wg)
+	go parseCategory(video, document, &wg)
 	wg.Wait()
 }
 
