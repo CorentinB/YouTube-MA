@@ -1,4 +1,4 @@
-[![forthebadge](https://forthebadge.com/images/badges/built-with-love.svg)](https://forthebadge.com)[![forthebadge](https://forthebadge.com/images/badges/made-with-go.svg)](https://forthebadge.com)[![Build Status](https://travis-ci.org/CorentinB/youtube-ma.svg?branch=master)](https://travis-ci.org/CorentinB/youtube-ma)
+[![forthebadge](https://forthebadge.com/images/badges/built-with-love.svg)](https://forthebadge.com)[![forthebadge](https://forthebadge.com/images/badges/made-with-go.svg)](https://forthebadge.com) [![Build Status](https://travis-ci.org/CorentinB/youtube-ma.svg?branch=master)](https://travis-ci.org/CorentinB/youtube-ma)
 # YouTube-MA
 💾 Light and fast YouTube metadata archiver written in Golang
 
