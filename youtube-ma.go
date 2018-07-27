@@ -13,17 +13,14 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/spf13/cast"
-	"github.com/wuriyanto48/replacer"
-
-	"strconv"
-
 	"github.com/PuerkitoBio/goquery"
 	"github.com/labstack/gommon/color"
+	"github.com/spf13/cast"
 	"golang.org/x/net/html"
 )
 
@@ -275,17 +272,15 @@ func parseUploaderInfo(video *Video, document *goquery.Document, wg *sync.WaitGr
 
 func parseLikeDislike(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 	defer wg.Done()
-	document.Find("button").Each(func(i int, s *goquery.Selection) {
-		if name, _ := s.Attr("class"); name == "yt-uix-button yt-uix-button-size-default yt-uix-button-opacity yt-uix-button-has-icon no-icon-markup like-button-renderer-like-button like-button-renderer-like-button-clicked yt-uix-button-toggled  hid yt-uix-tooltip" {
-			likeCount := s.Text()
-			video.InfoJSON.LikeCount = cast.ToFloat64(replacer.Replace(likeCount, ""))
-		}
+
+	document.Find("button.like-button-renderer-like-button").Each(func(i int, s *goquery.Selection) {
+		likeCount := strings.TrimSpace(s.Text())
+		video.InfoJSON.LikeCount = cast.ToFloat64(strings.Replace(likeCount, ",", "", -1))
+
 	})
-	document.Find("button").Each(func(i int, s *goquery.Selection) {
-		if name, _ := s.Attr("class"); name == "yt-uix-button yt-uix-button-size-default yt-uix-button-opacity yt-uix-button-has-icon no-icon-markup like-button-renderer-dislike-button like-button-renderer-dislike-button-unclicked yt-uix-clickcard-target   yt-uix-tooltip" {
-			dislikeCount := s.Text()
-			video.InfoJSON.DislikeCount = cast.ToFloat64(replacer.Replace(dislikeCount, ""))
-		}
+	document.Find("button.like-button-renderer-dislike-button").Each(func(i int, s *goquery.Selection) {
+		dislikeCount := strings.TrimSpace(s.Text())
+		video.InfoJSON.DislikeCount = cast.ToFloat64(strings.Replace(dislikeCount, ",", "", -1))
 	})
 }
 
