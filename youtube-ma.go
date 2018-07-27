@@ -166,7 +166,7 @@ func writeFiles(video *Video) {
 	defer infoFile.Close()
 	fmt.Fprintf(annotationsFile, "%s", video.Annotations)
 	fmt.Fprintf(descriptionFile, "%s", video.Description)
-	JSON, _ := JsonMarshalIndentNoEscapeHTML(video.InfoJSON, "", "  ")
+	JSON, _ := JSONMarshalIndentNoEscapeHTML(video.InfoJSON, "", "  ")
 	fmt.Fprintf(infoFile, "%s", string(JSON))
 }
 
