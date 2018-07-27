@@ -317,7 +317,35 @@ func parseCategory(video *Video, document *goquery.Document, wg *sync.WaitGroup)
 	video.InfoJSON.Category = doc.Find("a").Text()
 }
 
-func parseLicense(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+func parseAgeLimit(video *Video, wg *sync.WaitGroup) {
+	defer wg.Done()
+	pattern, _ := regexp.Compile(`(?s)<h4[^>]*>\s*Notice\s*</h4>\s*<ul[^>]*>(.*?)</ul>`)
+	m := pattern.FindAllStringSubmatch(video.RawHTML, -1)
+	if len(m) == 1 && len(m[0]) == 2 {
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(m[0][1]))
+		if err != nil {
+			panic(err)
+		}
+		isLicense := doc.Find("a").Text()
+		if strings.Contains(isLicense, "Age-restricted video (based on Community Guidelines)") == true {
+			video.InfoJSON.AgeLimit = 18
+		}
+	}
+}
+func parseDuration(video *Video, wg *sync.WaitGroup) {
+	defer wg.Done()
+	/*pattern, _ := regexp.Compile(`(length_seconds)":"((\\"|[^"])*)`)
+	m := pattern.FindAllStringSubmatch(video.RawHTML, -1)
+	if len(m) == 1 && len(m[0]) == 2 {
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(m[0][1]))
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(doc.Find("script ").Text())
+	}*/
+}
+
+func parseLicense(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
 	pattern, _ := regexp.Compile(`<h4[^>]+class="title"[^>]*>\s*License\s*</h4>\s*<ul[^>]*>\s*<li>(.+?)</li`)
 	m := pattern.FindAllStringSubmatch(video.RawHTML, -1)
@@ -332,7 +360,7 @@ func parseLicense(video *Video, document *goquery.Document, wg *sync.WaitGroup) 
 
 func parseVariousInfo(video *Video, document *goquery.Document) {
 	var wg sync.WaitGroup
-	wg.Add(8)
+	wg.Add(10)
 	video.InfoJSON.ID = video.ID
 	video.InfoJSON.Description = video.Description
 	video.InfoJSON.Annotations = video.Annotations
@@ -341,11 +369,13 @@ func parseVariousInfo(video *Video, document *goquery.Document) {
 	go parseUploaderInfo(video, document, &wg)
 	go parseLikeDislike(video, document, &wg)
 	go parseDatePublished(video, document, &wg)
-	go parseLicense(video, document, &wg)
+	go parseLicense(video, &wg)
 	go parseViewCount(video, document, &wg)
 	go parseAverageRating(video, document, &wg)
 	go parseTags(video, document, &wg)
 	go parseCategory(video, document, &wg)
+	go parseAgeLimit(video, &wg)
+	go parseDuration(video, &wg)
 	wg.Wait()
 }
 
