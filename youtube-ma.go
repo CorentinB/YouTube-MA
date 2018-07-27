@@ -537,21 +537,21 @@ func processSingleID(ID string, worker *sync.WaitGroup) {
 	video.ID = ID
 	video.InfoJSON.Subtitles = make(map[string][]Subtitle)
 	video.playerArgs = make(map[string]interface{})
-	color.Println(color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving started."))
+	logInfo("-", video, "Archiving started.")
 	wg.Add(2)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching annotations.."))
+	logInfo("~", video, "Fetching annotations..")
 	go fetchAnnotations(video, &wg)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Parsing infos, description, title and thumbnail.."))
+	logInfo("~", video, "Parsing infos, description, title and thumbnail..")
 	go parseHTML(video, &wg)
 	wg.Wait()
 	genPath(video)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching subtitles.."))
+	logInfo("~", video, "Fetching subtitles..")
 	fetchSubsList(video)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Writing informations locally.."))
+	logInfo("~", video, "Writing informations locally..")
 	writeFiles(video)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Downloading thumbnail.."))
+	logInfo("~", video, "Downloading thumbnail..")
 	downloadThumbnail(video)
-	color.Println(color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving complete!"))
+	logInfo("✓", video, "Archiving complete!")
 }
 
 func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
@@ -559,21 +559,29 @@ func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
 	var wg sync.WaitGroup
 	video := new(Video)
 	video.ID = ID
-	color.Println(color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving started."))
+	logInfo("-", video, "Archiving started.")
 	wg.Add(2)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching annotations.."))
+	logInfo("~", video, "Fetching annotations..")
 	go fetchAnnotations(video, &wg)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Parsing description, title and thumbnail.."))
+	logInfo("~", video, "Parsing description, title and thumbnail..")
 	go parseHTML(video, &wg)
 	wg.Wait()
 	genPath(video)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Writing informations locally.."))
-	writeFiles(video)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Downloading thumbnail.."))
-	downloadThumbnail(video)
-	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching subtitles.."))
+	logInfo("~", video, "Fetching subtitles..")
 	fetchSubsList(video)
-	color.Println(color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving complete!"))
+	logInfo("~", video, "Writing informations locally..")
+	writeFiles(video)
+	logInfo("~", video, "Downloading thumbnail..")
+	downloadThumbnail(video)
+	logInfo("✓", video, "Archiving complete!")
+}
+
+func logInfo(info string, video *Video, log string) {
+	if info == "-" || info == "✓" {
+		color.Println(color.Yellow("[") + color.Green(info) + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
+	} else {
+		color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
+	}
 }
 
 func processList(path string, worker *sync.WaitGroup) {
