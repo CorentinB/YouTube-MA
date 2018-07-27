@@ -20,10 +20,11 @@ import (
 	"github.com/spf13/cast"
 	"github.com/wuriyanto48/replacer"
 
+	"strconv"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/labstack/gommon/color"
 	"golang.org/x/net/html"
-	"strconv"
 )
 
 // Video structure containing all metadata for the video
@@ -57,7 +58,7 @@ type infoJSON struct {
 	UploaderID        string                `json:"uploader_id"`
 	UploaderURL       string                `json:"uploader_url"`
 	UploadDate        string                `json:"upload_date"`
-	License           string                `json:"license,omitempty"`
+	License           string                `json:"license"`
 	Creator           string                `json:"creator"`
 	Title             string                `json:"title"`
 	AltTitle          string                `json:"alt_title"`
@@ -316,15 +317,10 @@ func parseViewCount(video *Video, document *goquery.Document, wg *sync.WaitGroup
 
 func parseAverageRating(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 	defer wg.Done()
-	/*document.Find("script ").Each(func(i int, s *goquery.Selection) {
-		if strings.Contains(s.Text(), "avg_rating") == true {
-			ytPlayer := s.Text()
-			pattern := regexp.MustCompile(`\(([^\)]+)\)`) // anything in parentheses
-			match := pattern.FindAllStringSubmatch(ytPlayer, 1)
-			fmt.Printf("%#v\n", match) // see the structure of what is being returned
-			fmt.Println("result: ", match[0][1])
-		}
-	})*/
+	if l, ok := video.playerArgs["avg_rating"]; ok {
+		dur, _ := strconv.ParseFloat(l.(string), 64)
+		video.InfoJSON.AverageRating = dur
+	}
 }
 
 func parseTags(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
@@ -598,15 +594,11 @@ func processList(path string, worker *sync.WaitGroup) {
 	defer file.Close()
 	// scan the list line by line
 	scanner := bufio.NewScanner(file)
-	// count number of IDs
+	// scan the list line by line
 	for scanner.Scan() {
 		count++
 		wg.Add(1)
 		go processSingleIDFromList(scanner.Text(), &wg)
-		if count == 32 {
-			wg.Wait()
-			count = 0
-		}
 	}
 	// log if error
 	if err := scanner.Err(); err != nil {
