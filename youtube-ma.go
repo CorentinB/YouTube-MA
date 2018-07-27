@@ -23,6 +23,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/labstack/gommon/color"
 	"golang.org/x/net/html"
+	"strconv"
 )
 
 // Video structure containing all metadata for the video
@@ -35,6 +36,7 @@ type Video struct {
 	Path        string
 	RawHTML     string
 	InfoJSON    infoJSON
+	playerArgs  map[string]interface{}
 }
 
 // Tracklist structure containing all subtitles tracks for the video
@@ -64,18 +66,18 @@ type infoJSON struct {
 	Category          string                `json:"category"`
 	Tags              []string              `json:"tags"`
 	Subtitles         map[string][]Subtitle `json:"subtitles"`
+	AutomaticCaptions string                `json:"automatic_captions"`
+	Duration          float64               `json:"duration"`
+	AgeLimit          float64               `json:"age_limit"`
+	Annotations       string                `json:"annotations"`
+	Chapters          string                `json:"chapters"`
+	WebpageURL        string                `json:"webpage_url"`
+	ViewCount         float64               `json:"view_count"`
+	LikeCount         float64               `json:"like_count"`
+	DislikeCount      float64               `json:"dislike_count"`
+	AverageRating     float64               `json:"average_rating"`
+	Formats           []Format              `json:"formats"`
 	subLock           sync.Mutex
-	AutomaticCaptions string   `json:"automatic_captions"`
-	Duration          float64  `json:"duration"`
-	AgeLimit          float64  `json:"age_limit"`
-	Annotations       string   `json:"annotations"`
-	Chapters          string   `json:"chapters"`
-	WebpageURL        string   `json:"webpage_url"`
-	ViewCount         float64  `json:"view_count"`
-	LikeCount         float64  `json:"like_count"`
-	DislikeCount      float64  `json:"dislike_count"`
-	AverageRating     float64  `json:"average_rating"`
-	Formats           []Format `json:"formats"`
 }
 
 type Subtitle struct {
@@ -224,6 +226,35 @@ func parseDescription(video *Video, document *goquery.Document, workers *sync.Wa
 	})
 }
 
+func parsePlayerArgs(video *Video, document *goquery.Document, workers *sync.WaitGroup) {
+	defer workers.Done()
+
+	const pre = "var ytplayer = ytplayer || {};ytplayer.config = "
+	const post = ";ytplayer.load "
+
+	// extract ytplayer.config
+	script := document.Find("div#player").Find("script")
+	script.Each(func(i int, s *goquery.Selection) {
+		js := s.Text()
+		if strings.HasPrefix(js, pre) {
+			i := strings.Index(js, post)
+			if i == -1 {
+				return
+			}
+			strCfg := js[len(pre):i]
+			var cfg struct {
+				Args map[string]interface{}
+			}
+			err := json.Unmarshal([]byte(strCfg), &cfg)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			video.playerArgs = cfg.Args
+		}
+	})
+}
+
 func parseUploaderInfo(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
 	defer wg.Done()
 	document.Find("a").Each(func(i int, s *goquery.Selection) {
@@ -334,15 +365,10 @@ func parseAgeLimit(video *Video, wg *sync.WaitGroup) {
 }
 func parseDuration(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
-	/*pattern, _ := regexp.Compile(`(length_seconds)":"((\\"|[^"])*)`)
-	m := pattern.FindAllStringSubmatch(video.RawHTML, -1)
-	if len(m) == 1 && len(m[0]) == 2 {
-		doc, err := goquery.NewDocumentFromReader(strings.NewReader(m[0][1]))
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(doc.Find("script ").Text())
-	}*/
+	if l, ok := video.playerArgs["length_seconds"]; ok {
+		dur, _ := strconv.ParseFloat(l.(string), 64)
+		video.InfoJSON.Duration = dur
+	}
 }
 
 func parseLicense(video *Video, wg *sync.WaitGroup) {
@@ -402,7 +428,7 @@ func parseTitle(video *Video, document *goquery.Document, workers *sync.WaitGrou
 func parseHTML(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var workers sync.WaitGroup
-	workers.Add(3)
+	workers.Add(4)
 	// request video html page
 	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
 	if err != nil {
@@ -429,6 +455,7 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	go parseTitle(video, document, &workers)
 	go parseDescription(video, document, &workers)
 	go parseThumbnailURL(video, document, &workers)
+	go parsePlayerArgs(video, document, &workers)
 	workers.Wait()
 	parseVariousInfo(video, document)
 	defer html.Body.Close()
@@ -518,6 +545,7 @@ func processSingleID(ID string, worker *sync.WaitGroup) {
 	video := new(Video)
 	video.ID = ID
 	video.InfoJSON.Subtitles = make(map[string][]Subtitle)
+	video.playerArgs = make(map[string]interface{})
 	color.Println(color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Archiving started."))
 	wg.Add(2)
 	color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Green(" Fetching annotations.."))
