@@ -623,7 +623,7 @@ func argumentParsing(args []string) {
 	wg.Wait()
 }
 
-func JsonMarshalIndentNoEscapeHTML(i interface{}, prefix string, indent string) ([]byte, error) {
+func JSONMarshalIndentNoEscapeHTML(i interface{}, prefix string, indent string) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
