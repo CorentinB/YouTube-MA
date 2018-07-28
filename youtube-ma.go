@@ -632,11 +632,17 @@ func processSingleID(ID string, worker *sync.WaitGroup) {
 	logInfo("✓", video, "Archiving complete!")
 }
 
+var tildePre = color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[")
+var checkPre = color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[")
+var dashPre = color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[")
+
 func logInfo(info string, video *Video, log string) {
-	if info == "-" || info == "✓" {
-		color.Println(color.Yellow("[") + color.Green(info) + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
+	if info == "-" {
+		color.Println(dashPre + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
+	} else if info == "✓" {
+		color.Println(checkPre + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
 	} else {
-		color.Println(color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
+		color.Println(tildePre + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
 	}
 }
 
