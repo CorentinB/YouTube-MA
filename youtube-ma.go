@@ -409,11 +409,13 @@ func parseCategory(video *Video, document *goquery.Document, wg *sync.WaitGroup)
 	defer wg.Done()
 	pattern, _ := regexp.Compile(`(?s)<h4[^>]*>\s*Category\s*</h4>\s*<ul[^>]*>(.*?)</ul>`)
 	m := pattern.FindAllStringSubmatch(video.RawHTML, -1)
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(m[0][1]))
-	if err != nil {
-		panic(err)
+	if len(m) == 1 && len(m[0]) == 2 {
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(m[0][1]))
+		if err != nil {
+			panic(err)
+		}
+		video.InfoJSON.Category = doc.Find("a").Text()
 	}
-	video.InfoJSON.Category = doc.Find("a").Text()
 }
 
 func parseAgeLimit(video *Video, wg *sync.WaitGroup) {
@@ -501,13 +503,13 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	// request video html page
 	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.RemoveAll(video.Path)
 		runtime.Goexit()
 	}
 	// check status, exit if != 200
 	if html.StatusCode != 200 {
-		log.Fatalf("Status code error for %s: %d %s", video.ID, html.StatusCode, html.Status)
+		fmt.Fprintf(os.Stderr, "Status code error for %s: %d %s", video.ID, html.StatusCode, html.Status)
 		os.RemoveAll(video.Path)
 		runtime.Goexit()
 	}
@@ -517,7 +519,7 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 	// start goquery in the page
 	document, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.RemoveAll(video.Path)
 		runtime.Goexit()
 	}
@@ -586,18 +588,21 @@ func fetchSubsList(video *Video) {
 	// request subtitles list
 	res, err := http.Get("http://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" Unable to fetch subtitles!"))
+		runtime.Goexit()
 	}
 	// defer it!
 	defer res.Body.Close()
 	// check status, exit if != 200
 	if res.StatusCode != 200 {
-		log.Fatalf("Status code error while fetching subtitles for %s: %d %s", video.ID, res.StatusCode, res.Status)
+		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" Unable to fetch subtitles!"))
+		runtime.Goexit()
 	}
 	// reading tracks list as a byte array
 	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" Unable to fetch subtitles!"))
+		runtime.Goexit()
 	}
 	var tracks Tracklist
 	xml.Unmarshal(data, &tracks)
