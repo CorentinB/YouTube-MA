@@ -632,28 +632,6 @@ func processSingleID(ID string, worker *sync.WaitGroup) {
 	logInfo("✓", video, "Archiving complete!")
 }
 
-func processSingleIDFromList(ID string, worker *sync.WaitGroup) {
-	defer worker.Done()
-	var wg sync.WaitGroup
-	video := new(Video)
-	video.ID = ID
-	logInfo("-", video, "Archiving started.")
-	wg.Add(2)
-	logInfo("~", video, "Fetching annotations..")
-	go fetchAnnotations(video, &wg)
-	logInfo("~", video, "Parsing description, title and thumbnail..")
-	go parseHTML(video, &wg)
-	wg.Wait()
-	genPath(video)
-	logInfo("~", video, "Fetching subtitles..")
-	fetchSubsList(video)
-	logInfo("~", video, "Writing informations locally..")
-	writeFiles(video)
-	logInfo("~", video, "Downloading thumbnail..")
-	downloadThumbnail(video)
-	logInfo("✓", video, "Archiving complete!")
-}
-
 func logInfo(info string, video *Video, log string) {
 	if info == "-" || info == "✓" {
 		color.Println(color.Yellow("[") + color.Green(info) + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
@@ -679,7 +657,7 @@ func processList(path string, worker *sync.WaitGroup) {
 	for scanner.Scan() {
 		count++
 		wg.Add(1)
-		go processSingleIDFromList(scanner.Text(), &wg)
+		go processSingleID(scanner.Text(), &wg)
 	}
 	// log if error
 	if err := scanner.Err(); err != nil {
