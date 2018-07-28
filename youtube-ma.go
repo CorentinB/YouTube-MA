@@ -22,6 +22,7 @@ import (
 	"github.com/labstack/gommon/color"
 	"github.com/spf13/cast"
 	"golang.org/x/net/html"
+	"net/url"
 )
 
 // Video structure containing all metadata for the video
@@ -36,7 +37,7 @@ type Video struct {
 	STS         float64
 	InfoJSON    infoJSON
 	playerArgs  map[string]interface{}
-	RawFormats  string
+	RawFormats  []url.Values
 }
 
 // Tracklist structure containing all subtitles tracks for the video
@@ -323,7 +324,11 @@ func parseAverageRating(video *Video, wg *sync.WaitGroup) {
 func parseFormats(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if l, ok := video.playerArgs["adaptive_fmts"]; ok {
-		video.RawFormats = l.(string)
+		formats := strings.Split(l.(string), ",")
+		for _, format := range formats {
+			args, _ := url.ParseQuery(format)
+			video.RawFormats = append(video.RawFormats, args)
+		}
 	}
 }
 
