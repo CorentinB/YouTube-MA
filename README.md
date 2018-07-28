@@ -16,8 +16,10 @@ Then here is an example of usage with a single ID:
 ```
 But you can also use a list of IDs, be carefull to have an ID per line, no complete URL.
 ```
-./youtube-ma my_list.txt
+./youtube-ma my_list.txt 32
 ```
+Here **32** is the number of goroutines maximum that can be run at the same time, it'll depend on your system, as it's also linked to a certain number of files opened at the same time, that could be limited by your system's configuration. If you want to use a bigger value, tweak your system, such as **ulimit**.
+Default for this value if you don't precise any value is **16**, should be safe in most system.
 
 # Example
 
