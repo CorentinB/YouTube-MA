@@ -646,9 +646,9 @@ func logInfo(info string, video *Video, log string) {
 	}
 }
 
-func processList(path string, worker *sync.WaitGroup) {
+func processList(maxConc int64, path string, worker *sync.WaitGroup) {
 	defer worker.Done()
-	var count int
+	var count int64
 	// start workers group
 	var wg sync.WaitGroup
 	// open file
@@ -664,6 +664,10 @@ func processList(path string, worker *sync.WaitGroup) {
 		count++
 		wg.Add(1)
 		go processSingleID(scanner.Text(), &wg)
+		if count == maxConc {
+			wg.Wait()
+			count = 0
+		}
 	}
 	// log if error
 	if err := scanner.Err(); err != nil {
@@ -675,13 +679,22 @@ func processList(path string, worker *sync.WaitGroup) {
 func argumentParsing(args []string) {
 	// start workers group
 	var wg sync.WaitGroup
+	var maxConc int64
+	maxConc = 16
 	wg.Add(1)
-	if len(args) > 1 {
-		color.Red("Usage: ./youtube-ma [ID or list of IDs]")
+	if len(args) > 2 {
+		color.Red("Usage: ./youtube-ma [ID or list of IDs] [CONCURRENCY]")
 		os.Exit(1)
+	} else if len(args) == 2 {
+		if _, err := strconv.ParseInt(args[1], 10, 64); err == nil {
+			maxConc, _ = strconv.ParseInt(args[1], 10, 64)
+		} else {
+			color.Red("Usage: ./youtube-ma [ID or list of IDs] [CONCURRENCY]")
+			os.Exit(1)
+		}
 	}
 	if _, err := os.Stat(args[0]); err == nil {
-		go processList(args[0], &wg)
+		go processList(maxConc, args[0], &wg)
 	} else {
 		go processSingleID(args[0], &wg)
 	}
