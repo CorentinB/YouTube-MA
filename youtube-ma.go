@@ -33,8 +33,10 @@ type Video struct {
 	Description string
 	Path        string
 	RawHTML     string
+	STS         float64
 	InfoJSON    infoJSON
 	playerArgs  map[string]interface{}
+	RawFormats  string
 }
 
 // Tracklist structure containing all subtitles tracks for the video
@@ -310,11 +312,18 @@ func parseViewCount(video *Video, document *goquery.Document, wg *sync.WaitGroup
 	})
 }
 
-func parseAverageRating(video *Video, document *goquery.Document, wg *sync.WaitGroup) {
+func parseAverageRating(video *Video, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if l, ok := video.playerArgs["avg_rating"]; ok {
 		dur, _ := strconv.ParseFloat(l.(string), 64)
 		video.InfoJSON.AverageRating = dur
+	}
+}
+
+func parseFormats(video *Video, wg *sync.WaitGroup) {
+	defer wg.Done()
+	if l, ok := video.playerArgs["adaptive_fmts"]; ok {
+		video.RawFormats = l.(string)
 	}
 }
 
@@ -377,7 +386,7 @@ func parseLicense(video *Video, wg *sync.WaitGroup) {
 
 func parseVariousInfo(video *Video, document *goquery.Document) {
 	var wg sync.WaitGroup
-	wg.Add(10)
+	wg.Add(11)
 	video.InfoJSON.ID = video.ID
 	video.InfoJSON.Description = video.Description
 	video.InfoJSON.Annotations = video.Annotations
@@ -388,7 +397,8 @@ func parseVariousInfo(video *Video, document *goquery.Document) {
 	go parseDatePublished(video, document, &wg)
 	go parseLicense(video, &wg)
 	go parseViewCount(video, document, &wg)
-	go parseAverageRating(video, document, &wg)
+	go parseAverageRating(video, &wg)
+	go parseFormats(video, &wg)
 	go parseTags(video, document, &wg)
 	go parseCategory(video, document, &wg)
 	go parseAgeLimit(video, &wg)
@@ -626,6 +636,7 @@ func argumentParsing(args []string) {
 	wg.Wait()
 }
 
+// JSONMarshalIndentNoEscapeHTML allow proper json formatting
 func JSONMarshalIndentNoEscapeHTML(i interface{}, prefix string, indent string) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	encoder := json.NewEncoder(buf)
