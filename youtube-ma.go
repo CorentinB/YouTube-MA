@@ -533,8 +533,6 @@ func parseHTML(video *Video, wg *sync.WaitGroup) {
 }
 
 func genPath(video *Video) {
-	firstChar := video.ID[:1]
-	video.Path = firstChar + "/" + video.ID + "/"
 	// create directory if it doesnt exist
 	if _, err := os.Stat(video.Path); os.IsNotExist(err) {
 		err = os.MkdirAll(video.Path, 0755)
@@ -613,6 +611,20 @@ func fetchSubsList(video *Video) {
 	wg.Wait()
 }
 
+func checkFiles(video *Video) {
+	firstChar := video.ID[:1]
+	video.Path = firstChar + "/" + video.ID + "/"
+	files, err := ioutil.ReadDir(video.Path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		runtime.Goexit()
+	}
+	if len(files) >= 4 {
+		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" This video has already been archived!"))
+		runtime.Goexit()
+	}
+}
+
 func processSingleID(ID string, worker *sync.WaitGroup) {
 	defer worker.Done()
 	var wg sync.WaitGroup
@@ -620,6 +632,7 @@ func processSingleID(ID string, worker *sync.WaitGroup) {
 	video.ID = ID
 	video.InfoJSON.Subtitles = make(map[string][]Subtitle)
 	video.playerArgs = make(map[string]interface{})
+	checkFiles(video)
 	logInfo("-", video, "Archiving started.")
 	wg.Add(2)
 	logInfo("~", video, "Fetching annotations..")
