@@ -615,11 +615,7 @@ func checkFiles(video *Video) {
 	firstChar := video.ID[:1]
 	video.Path = firstChar + "/" + video.ID + "/"
 	files, err := ioutil.ReadDir(video.Path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		runtime.Goexit()
-	}
-	if len(files) >= 4 {
+	if err == nil && len(files) >= 4 {
 		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" This video has already been archived!"))
 		runtime.Goexit()
 	}
