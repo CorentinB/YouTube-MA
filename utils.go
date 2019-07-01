@@ -47,8 +47,9 @@ func genPath(video *Video) {
 }
 
 func checkFiles(video *Video) {
-	firstChar := video.ID[:1]
-	video.Path = firstChar + "/" + video.ID + "/"
+	firstLayer := video.ID[:1]
+	secondLayer := video.ID[:3]
+	video.Path = firstLayer + "/" + secondLayer + "/" + video.ID + "/"
 	files, err := ioutil.ReadDir(video.Path)
 	if err == nil && len(files) >= 4 {
 		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" This video has already been archived!"))
