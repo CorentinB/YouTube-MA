@@ -79,5 +79,13 @@ func archiveID(ID string, worker *sizedwaitgroup.SizedWaitGroup) {
 		return
 	}
 
+	// Mark the ID as archived
+	err = markIDsArchived(ID)
+	if err != nil {
+		workerLog.Println(err)
+		os.RemoveAll(video.Path)
+		return
+	}
+
 	workerLog.Println("archiving completed in " + time.Since(start).String())
 }
