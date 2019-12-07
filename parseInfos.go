@@ -131,18 +131,11 @@ func parseViewCount(video *Video, document *goquery.Document) error {
 	return nil
 }
 
-func parseAverageRating(video *Video) error {
-	video.InfoJSON.AverageRating = -1
-
+func parseAverageRating(video *Video) {
 	if l, ok := video.playerArgs["avg_rating"]; ok {
 		dur, _ := strconv.ParseFloat(l.(string), 64)
 		video.InfoJSON.AverageRating = dur
 	}
-
-	if video.InfoJSON.AverageRating == -1 {
-		return errors.New("error when parsing average rating, cancelation")
-	}
-	return nil
 }
 
 func parseTags(video *Video, document *goquery.Document) {
@@ -187,18 +180,12 @@ func parseAgeLimit(video *Video) error {
 	return nil
 }
 
-func parseDuration(video *Video) error {
-	video.InfoJSON.Duration = -1
-
+func parseDuration(video *Video) {
 	if l, ok := video.playerArgs["length_seconds"]; ok {
+		fmt.Println(l.(string))
 		dur, _ := strconv.ParseFloat(l.(string), 64)
 		video.InfoJSON.Duration = dur
 	}
-
-	if video.InfoJSON.Duration == -1 {
-		return errors.New("error when parsing video's duration, cancelation")
-	}
-	return nil
 }
 
 func parseLicense(video *Video) {
@@ -241,10 +228,7 @@ func parseVariousInfo(video *Video, document *goquery.Document) (err error) {
 		return err
 	}
 
-	err = parseAverageRating(video)
-	if err != nil {
-		return err
-	}
+	parseAverageRating(video)
 
 	err = parseFormats(video)
 	if err != nil {
@@ -263,10 +247,7 @@ func parseVariousInfo(video *Video, document *goquery.Document) (err error) {
 		return err
 	}
 
-	err = parseDuration(video)
-	if err != nil {
-		return err
-	}
+	parseDuration(video)
 
 	return nil
 }
