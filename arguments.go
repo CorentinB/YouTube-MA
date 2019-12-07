@@ -1,34 +1,59 @@
 package main
 
 import (
+	"fmt"
 	"os"
-	"strconv"
-	"sync"
+	"strings"
 
-	"github.com/labstack/gommon/color"
+	"github.com/akamensky/argparse"
 )
 
-func argumentParsing(args []string) {
-	// start workers group
-	var wg sync.WaitGroup
-	var maxConc int64
-	maxConc = 16
-	wg.Add(1)
-	if len(args) > 2 {
-		color.Red("Usage: ./youtube-ma [ID or list of IDs] [CONCURRENCY]")
-		os.Exit(1)
-	} else if len(args) == 2 {
-		if _, err := strconv.ParseInt(args[1], 10, 64); err == nil {
-			maxConc, _ = strconv.ParseInt(args[1], 10, 64)
-		} else {
-			color.Red("Usage: ./youtube-ma [ID or list of IDs] [CONCURRENCY]")
-			os.Exit(1)
-		}
+var arguments = struct {
+	Concurrency int
+	Output      string
+	Secret      string
+	Verbose     bool
+}{}
+
+func parseArgs(args []string) {
+	// Create new parser object
+	parser := argparse.NewParser("YouTube-MA", "YouTube metadata archiver")
+
+	concurrency := parser.Int("j", "concurrency", &argparse.Options{
+		Required: false,
+		Help:     "Concurrency",
+		Default:  4})
+
+	output := parser.String("o", "output", &argparse.Options{
+		Required: false,
+		Help:     "Output directory",
+		Default:  "videos"})
+
+	secret := parser.String("s", "secret", &argparse.Options{
+		Required: true,
+		Help:     "Secret youtube.the-eye.eu API key",
+		Default:  false})
+
+	verbose := parser.Flag("v", "verbose", &argparse.Options{
+		Required: false,
+		Help:     "Verbose output",
+		Default:  false})
+
+	// Parse input
+	err := parser.Parse(args)
+	if err != nil {
+		// In case of error print error and print usage
+		// This can also be done by passing -h or --help flags
+		fmt.Print(parser.Usage(err))
+		os.Exit(0)
 	}
-	if _, err := os.Stat(args[0]); err == nil {
-		go processList(maxConc, args[0], &wg)
-	} else {
-		go processSingleID(args[0], &wg)
-	}
-	wg.Wait()
+
+	// Remove trailing slash in output path
+	*output = strings.Replace(*output, "/", "", -1)
+
+	// Fill arguments structure
+	arguments.Concurrency = *concurrency
+	arguments.Output = *output
+	arguments.Secret = *secret
+	arguments.Verbose = *verbose
 }

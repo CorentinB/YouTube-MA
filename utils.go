@@ -3,26 +3,94 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
-	"runtime"
-
-	"github.com/labstack/gommon/color"
+	"sync"
 )
 
-var tildePre = color.Yellow("[") + color.Magenta("~") + color.Yellow("]") + color.Yellow("[")
-var checkPre = color.Yellow("[") + color.Green("✓") + color.Yellow("]") + color.Yellow("[")
-var dashPre = color.Yellow("[") + color.Green("-") + color.Yellow("]") + color.Yellow("[")
+// Video structure containing all metadata for the video
+type Video struct {
+	ID          string
+	Title       string
+	Annotations string
+	Thumbnail   string
+	Description string
+	Path        string
+	RawHTML     string
+	STS         float64
+	InfoJSON    infoJSON
+	playerArgs  map[string]interface{}
+	RawFormats  []url.Values
+}
 
-func logInfo(info string, video *Video, log string) {
-	if info == "-" {
-		color.Println(dashPre + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
-	} else if info == "✓" {
-		color.Println(checkPre + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
-	} else {
-		color.Println(tildePre + color.Cyan(video.ID) + color.Yellow("] ") + color.Green(log))
-	}
+// Tracklist structure containing all subtitles tracks for the video
+type Tracklist struct {
+	Tracks []Track `xml:"track"`
+}
+
+// Track structure for data about single subtitle
+type Track struct {
+	LangCode string `xml:"lang_code,attr"`
+	Lang     string `xml:"lang_translated,attr"`
+}
+
+// infoJSON structure containing the generated json data
+type infoJSON struct {
+	ID            string                `json:"id"`
+	Uploader      string                `json:"uploader"`
+	UploaderID    string                `json:"uploader_id"`
+	UploaderURL   string                `json:"uploader_url"`
+	UploadDate    string                `json:"upload_date"`
+	License       string                `json:"license,omitempty"`
+	Creator       string                `json:"creator,omitempty"`
+	Title         string                `json:"title"`
+	AltTitle      string                `json:"alt_title,omitempty"`
+	Thumbnail     string                `json:"thumbnail"`
+	Description   string                `json:"description"`
+	Category      string                `json:"category"`
+	Tags          []string              `json:"tags"`
+	Subtitles     map[string][]Subtitle `json:"subtitles"`
+	Duration      float64               `json:"duration"`
+	AgeLimit      float64               `json:"age_limit"`
+	Annotations   string                `json:"annotations"`
+	WebpageURL    string                `json:"webpage_url"`
+	ViewCount     float64               `json:"view_count"`
+	LikeCount     float64               `json:"like_count"`
+	DislikeCount  float64               `json:"dislike_count"`
+	AverageRating float64               `json:"average_rating"`
+	Formats       []Format              `json:"formats"`
+	subLock       sync.Mutex
+}
+
+// Subtitle struct hold subtitle data
+type Subtitle struct {
+	URL string `json:"url"`
+	Ext string `json:"ext"`
+}
+
+// Format structure for all different formats informations
+type Format struct {
+	FormatID     string  `json:"format_id"`
+	Ext          string  `json:"ext"`
+	URL          string  `json:"url"`
+	Height       float64 `json:"height,omitempty"`
+	Width        float64 `json:"width,omitempty"`
+	FormatNote   string  `json:"format_note"`
+	Bitrate      float64 `json:"bitrate"`
+	Fps          float64 `json:"fps,omitempty"`
+	Format       string  `json:"format"`
+	Clen         float64 `json:"clen,omitempty"`
+	EOTF         string  `json:"eotf,omitempty"`
+	Index        string  `json:"index,omitempty"`
+	Init         string  `json:"init,omitempty"`
+	Lmt          float64 `json:"lmt,omitempty"`
+	Primaries    string  `json:"primaries,omitempty"`
+	QualityLabel string  `json:"quality_label,omitempty"`
+	Type         string  `json:"type"`
+	Size         string  `json:"size,omitempty"`
 }
 
 // JSONMarshalIndentNoEscapeHTML allow proper json formatting
@@ -35,52 +103,53 @@ func JSONMarshalIndentNoEscapeHTML(i interface{}, prefix string, indent string) 
 	return buf.Bytes(), err
 }
 
-func genPath(video *Video) {
-	// create directory if it doesnt exist
+func genPath(video *Video) error {
 	if _, err := os.Stat(video.Path); os.IsNotExist(err) {
 		err = os.MkdirAll(video.Path, 0755)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			runtime.Goexit()
+			return err
 		}
 	}
+	return nil
 }
 
-func checkFiles(video *Video) {
+func checkFiles(video *Video) error {
+	// Define path based on the video ID
 	firstLayer := video.ID[:1]
 	secondLayer := video.ID[:3]
-	video.Path = firstLayer + "/" + secondLayer + "/" + video.ID + "/"
+	video.Path = arguments.Output + "/" + firstLayer + "/" + secondLayer + "/" + video.ID + "/"
+
+	// Check if the path contain at least 3 files
+	// if not, return an error
 	files, err := ioutil.ReadDir(video.Path)
-	if err == nil && len(files) >= 4 {
-		color.Println(color.Yellow("[") + color.Red("!") + color.Yellow("]") + color.Yellow("[") + color.Cyan(video.ID) + color.Yellow("]") + color.Red(" This video has already been archived!"))
-		runtime.Goexit()
+	if err == nil && len(files) >= 3 {
+		return errors.New("this video has already been archived")
 	}
+	return nil
 }
 
-func writeFiles(video *Video) {
-	// write annotations
-	annotationsFile, errAnno := os.Create(video.Path + video.ID + "_" + video.Title + ".annotations.xml")
-	if errAnno != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errAnno)
-		runtime.Goexit()
-	}
-	defer annotationsFile.Close()
+func writeFiles(video *Video) error {
 	// write description
-	descriptionFile, errDescription := os.Create(video.Path + video.ID + "_" + video.Title + ".description")
-	if errDescription != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errDescription)
-		runtime.Goexit()
+	descriptionFile, err := os.Create(video.Path + video.ID + "_" + video.Title + ".description")
+	if err != nil {
+		return err
 	}
 	defer descriptionFile.Close()
+
 	// write info json file
-	infoFile, errInfo := os.Create(video.Path + video.ID + "_" + video.Title + ".info.json")
-	if errInfo != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", errInfo)
-		runtime.Goexit()
+	infoFile, err := os.Create(video.Path + video.ID + "_" + video.Title + ".info.json")
+	if err != nil {
+		return err
 	}
 	defer infoFile.Close()
-	fmt.Fprintf(annotationsFile, "%s", video.Annotations)
+
 	fmt.Fprintf(descriptionFile, "%s", video.Description)
-	JSON, _ := JSONMarshalIndentNoEscapeHTML(video.InfoJSON, "", "  ")
+
+	JSON, err := JSONMarshalIndentNoEscapeHTML(video.InfoJSON, "", "  ")
+	if err != nil {
+		return err
+	}
+
 	fmt.Fprintf(infoFile, "%s", string(JSON))
+	return nil
 }

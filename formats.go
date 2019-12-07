@@ -1,13 +1,21 @@
 package main
 
 import (
+	"errors"
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 )
 
-func addFormats(video *Video) {
+func parseFormats(video *Video) error {
+	if l, ok := video.playerArgs["adaptive_fmts"]; ok {
+		formats := strings.Split(l.(string), ",")
+		for _, format := range formats {
+			args, _ := url.ParseQuery(format)
+			video.RawFormats = append(video.RawFormats, args)
+		}
+	}
+
 	for _, rawFormat := range video.RawFormats {
 		tmpFormat := Format{}
 		for k, v := range rawFormat {
@@ -81,16 +89,9 @@ func addFormats(video *Video) {
 		}
 		video.InfoJSON.Formats = append(video.InfoJSON.Formats, tmpFormat)
 	}
-}
 
-func parseFormats(video *Video, wg *sync.WaitGroup) {
-	defer wg.Done()
-	if l, ok := video.playerArgs["adaptive_fmts"]; ok {
-		formats := strings.Split(l.(string), ",")
-		for _, format := range formats {
-			args, _ := url.ParseQuery(format)
-			video.RawFormats = append(video.RawFormats, args)
-		}
+	if len(video.InfoJSON.Formats) < 1 {
+		return errors.New("error when parsing formats, cancelation")
 	}
-	addFormats(video)
+	return nil
 }
