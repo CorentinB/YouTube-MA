@@ -51,7 +51,7 @@ func fetchSubs(video *Video) error {
 	var tracks Tracklist
 
 	// request subtitles list
-	res, err := http.Get("http://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
+	res, err := http.Get("https://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
 	if err != nil {
 		return err
 	}

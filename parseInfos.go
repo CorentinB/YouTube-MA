@@ -285,7 +285,7 @@ func parseTitle(video *Video, document *goquery.Document) error {
 
 func parseHTML(video *Video) error {
 	// request video html page
-	html, err := http.Get("http://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
+	html, err := http.Get("https://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
 	if err != nil {
 		return err
 	}
@@ -293,7 +293,7 @@ func parseHTML(video *Video) error {
 
 	// check status, exit if != 200
 	if html.StatusCode != 200 {
-		return errors.New("status code != 200")
+		return errors.New("status code != 200 when requesting the video page")
 	}
 	body, err := ioutil.ReadAll(html.Body)
 
