@@ -264,6 +264,23 @@ func parseTitle(video *Video, document *goquery.Document) error {
 	return nil
 }
 
+func grabSuggestions(document *goquery.Document) error {
+	var videoIDs []string
+
+	document.Find("span").Each(func(i int, s *goquery.Selection) {
+		if name, _ := s.Attr("class"); name == "yt-uix-simple-thumb-wrap yt-uix-simple-thumb-related" {
+			videoID, _ := s.Attr("data-vid")
+			videoIDs = append(videoIDs, videoID)
+		}
+	})
+
+	err := pushIDs(videoIDs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func parseHTML(video *Video) error {
 	// request video html page
 	html, err := http.Get("https://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
@@ -303,6 +320,11 @@ func parseHTML(video *Video) error {
 	}
 
 	err = parseVariousInfo(video, document)
+	if err != nil {
+		return err
+	}
+
+	err = grabSuggestions(document)
 	if err != nil {
 		return err
 	}

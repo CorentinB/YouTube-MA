@@ -27,6 +27,31 @@ type Payload struct {
 	VideoIds []string `json:"video_ids"`
 }
 
+func pushIDs(videoIDs []string) error {
+	data := new(Payload)
+	data.VideoIds = videoIDs
+	payloadBytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	body := bytes.NewReader(payloadBytes)
+
+	req, err := http.NewRequest("POST", "https://youtube.the-eye.eu/api/admin/requests", body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Secret", arguments.Secret)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
 func markIDsArchived(IDs ...string) error {
 	data := new(Payload)
 	data.VideoIds = IDs
