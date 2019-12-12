@@ -78,12 +78,12 @@ func markIDsArchived(IDs ...string) error {
 }
 
 func getID(secret string, offset, limit int) (IDs []string) {
-	URL := "https://youtube.the-eye.eu/api/admin/requests?secret=" + secret +
-		"&offset=" + strconv.Itoa(offset) +
+	URL := "https://youtube.the-eye.eu/api/admin/requests?" +
+		"offset=" + strconv.Itoa(offset) +
 		"&limit=" + strconv.Itoa(limit)
 
 	spaceClient := http.Client{
-		Timeout: time.Second * 2, // Maximum of 2 secs
+		Timeout: time.Second * 10,
 	}
 
 	req, err := http.NewRequest(http.MethodGet, URL, nil)
@@ -91,7 +91,7 @@ func getID(secret string, offset, limit int) (IDs []string) {
 		log.Fatal(err)
 	}
 
-	req.Header.Set("User-Agent", "spacecount-tutorial")
+	req.Header.Set("X-Secret", secret)
 
 	res, getErr := spaceClient.Do(req)
 	if getErr != nil {
@@ -106,7 +106,8 @@ func getID(secret string, offset, limit int) (IDs []string) {
 	requestResponse := AdminRequests{}
 	jsonErr := json.Unmarshal(body, &requestResponse)
 	if jsonErr != nil {
-		log.Fatal(jsonErr)
+		log.Println(jsonErr)
+		return nil
 	}
 
 	for _, response := range requestResponse.Requests {
@@ -114,7 +115,8 @@ func getID(secret string, offset, limit int) (IDs []string) {
 	}
 
 	if len(IDs) < 1 {
-		log.Fatal("list of IDs returned by the API is empty")
+		log.Println(jsonErr)
+		return nil
 	}
 
 	return IDs
