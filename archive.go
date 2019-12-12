@@ -4,12 +4,10 @@ import (
 	"log"
 	"os"
 	"time"
-
-	"github.com/remeh/sizedwaitgroup"
 )
 
-func archiveID(ID string, worker *sizedwaitgroup.SizedWaitGroup) {
-	defer worker.Done()
+// Returns true if we should mark as archived
+func archiveID(ID string) (archived bool) {
 
 	// Record start time
 	start := time.Now()
@@ -34,11 +32,7 @@ func archiveID(ID string, worker *sizedwaitgroup.SizedWaitGroup) {
 	// Check if the files already exists
 	err = checkFiles(video)
 	if err != nil {
-		err = markIDsArchived(ID)
-		if err != nil {
-			workerLog.Fatalln(err)
-		}
-		return
+		return true
 	}
 
 	// Generate path to store files
@@ -52,7 +46,7 @@ func archiveID(ID string, worker *sizedwaitgroup.SizedWaitGroup) {
 	if err != nil {
 		workerLog.Println(err)
 		os.RemoveAll(video.Path)
-		return
+		return false
 	}
 
 	// Fetch subtitles
@@ -60,7 +54,7 @@ func archiveID(ID string, worker *sizedwaitgroup.SizedWaitGroup) {
 	if err != nil {
 		workerLog.Println(err)
 		os.RemoveAll(video.Path)
-		return
+		return false
 	}
 
 	// Write metadata to files
@@ -68,7 +62,7 @@ func archiveID(ID string, worker *sizedwaitgroup.SizedWaitGroup) {
 	if err != nil {
 		workerLog.Println(err)
 		os.RemoveAll(video.Path)
-		return
+		return false
 	}
 
 	// Download the thumbnail
@@ -76,16 +70,9 @@ func archiveID(ID string, worker *sizedwaitgroup.SizedWaitGroup) {
 	if err != nil {
 		workerLog.Println(err)
 		os.RemoveAll(video.Path)
-		return
-	}
-
-	// Mark the ID as archived
-	err = markIDsArchived(ID)
-	if err != nil {
-		workerLog.Println(err)
-		os.RemoveAll(video.Path)
-		return
+		return false
 	}
 
 	workerLog.Println("archiving completed in " + time.Since(start).String())
+	return true
 }
