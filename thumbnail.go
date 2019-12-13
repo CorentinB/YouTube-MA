@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"net/http"
 	"os"
 )
 
@@ -15,7 +14,7 @@ func downloadThumbnail(video *Video) error {
 	defer out.Close()
 
 	// get the data
-	resp, err := http.Get(video.Thumbnail)
+	resp, err := getHttpClient().Get(video.Thumbnail)
 	if err != nil {
 		return err
 	}

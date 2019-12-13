@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,21 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/spf13/cast"
 )
+
+func getHttpClient() *http.Client {
+	if arguments.Proxy != nil {
+		return &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyURL(arguments.Proxy),
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+	} else {
+		return &http.Client{}
+	}
+}
 
 func parsePlayerArgs(video *Video, document *goquery.Document) error {
 	const pre = "var ytplayer = ytplayer || {};ytplayer.config = "
@@ -283,7 +299,7 @@ func grabSuggestions(document *goquery.Document) error {
 
 func parseHTML(video *Video) error {
 	// request video html page
-	html, err := http.Get("https://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
+	html, err := getHttpClient().Get("https://youtube.com/watch?v=" + video.ID + "&gl=US&hl=en&has_verified=1&bpctr=9999999999")
 	if err != nil {
 		return err
 	}

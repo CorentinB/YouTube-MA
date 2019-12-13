@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -12,6 +13,7 @@ var arguments = struct {
 	Concurrency int
 	Output      string
 	Secret      string
+	Proxy       *url.URL
 	Verbose     bool
 }{}
 
@@ -39,6 +41,11 @@ func parseArgs(args []string) {
 		Help:     "Verbose output",
 		Default:  false})
 
+	proxy := parser.String("p", "proxy", &argparse.Options{
+		Required: false,
+		Help:     "Proxy url",
+		Default:  ""})
+
 	// Parse input
 	err := parser.Parse(args)
 	if err != nil {
@@ -46,6 +53,10 @@ func parseArgs(args []string) {
 		// This can also be done by passing -h or --help flags
 		fmt.Print(parser.Usage(err))
 		os.Exit(0)
+	}
+
+	if proxy != nil {
+		arguments.Proxy, _ = url.Parse(*proxy)
 	}
 
 	// Remove trailing slash in output path

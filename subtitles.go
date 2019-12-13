@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 )
 
@@ -25,7 +24,7 @@ func downloadSub(video *Video, langCode string, lang string) error {
 	url := "http://www.youtube.com/api/timedtext?lang=" + langCode + "&v=" + video.ID
 
 	// get the data
-	resp, err := http.Get(url)
+	resp, err := getHttpClient().Get(url)
 	if err != nil {
 		return err
 	}
@@ -51,7 +50,7 @@ func fetchSubs(video *Video) error {
 	var tracks Tracklist
 
 	// request subtitles list
-	res, err := http.Get("https://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
+	res, err := getHttpClient().Get("https://video.google.com/timedtext?hl=en&type=list&v=" + video.ID)
 	if err != nil {
 		return err
 	}
