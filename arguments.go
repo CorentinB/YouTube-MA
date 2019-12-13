@@ -55,7 +55,7 @@ func parseArgs(args []string) {
 		os.Exit(0)
 	}
 
-	if proxy != nil {
+	if *proxy != "" {
 		arguments.Proxy, _ = url.Parse(*proxy)
 	}
 
