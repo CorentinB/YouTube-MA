@@ -19,19 +19,44 @@ import (
 	"github.com/spf13/cast"
 )
 
+type YtmaTripper struct {
+	Tripper http.RoundTripper
+}
+
+func (t *YtmaTripper) RoundTrip(req *http.Request) (res *http.Response, err error) {
+
+	req.Header.Add("Accept-Language", "en-US")
+	req.Header.Add("Host", "www.youtube.com")
+	req.Header.Add("X-YouTube-Client-Name", "1")
+	req.Header.Add("X-YouTube-Client-Version", "2.20170707")
+
+	return t.Tripper.RoundTrip(req)
+}
+
 func getHttpClient() *http.Client {
+
+	var client *http.Client
+
 	if arguments.Proxy != nil {
-		return &http.Client{
-			Transport: &http.Transport{
-				Proxy: http.ProxyURL(arguments.Proxy),
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true,
+		client = &http.Client{
+			Transport: &YtmaTripper{
+				Tripper: &http.Transport{
+					Proxy: http.ProxyURL(arguments.Proxy),
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true,
+					},
 				},
 			},
 		}
 	} else {
-		return &http.Client{}
+		client = &http.Client{
+			Transport: &YtmaTripper{
+				Tripper: http.DefaultTransport,
+			},
+		}
 	}
+
+	return client
 }
 
 func parsePlayerArgs(video *Video, document *goquery.Document) error {
